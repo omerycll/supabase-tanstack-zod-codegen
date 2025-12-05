@@ -1,115 +1,159 @@
-<p style="text-align: center;">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/banner-dark-mode.png">
-    <img alt="Supabase and react query codegen" src="./assets/banner-light-mode.png" width="100%">
-  </picture>
-</p>
+# Supabase TanStack Zod Codegen
 
-[![npm version](https://img.shields.io/npm/v/supabase-react-query-codegen.svg)](https://www.npmjs.com/package/supabase-react-query-codegen) [![npm](https://img.shields.io/npm/dt/supabase-react-query-codegen.svg)](https://www.npmjs.com/package/supabase-react-query-codegen) 
- [![Known Vulnerabilities](https://snyk.io/test/github/barrymichaeldoyle/supabase-react-query-codegen/badge.svg)](https://snyk.io/test/github/barrymichaeldoyle/supabase-react-query-codegen) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+A CLI tool to automatically generate TanStack Query (React Query v5) hooks, Zod schemas, and TypeScript types for your Supabase Database.
 
-# Supabase React Query Codegen 🚀
+## Features
 
-A CLI tool to automatically generate React Query hooks and TypeScript types for your Supabase Database, streamlining data fetching and enhancing developer productivity.
+- Generates TanStack Query v5 hooks for CRUD operations
+- Generates Zod v4 schemas for runtime validation
+- TypeScript types derived from Zod schemas using `z.infer`
+- Automatic cache invalidation on mutations
+- Works with Supabase generated types
 
-## Table of Contents  📚
-
-- [Features ⭐️](#features-⭐️)
-- [Installation 📥](#installation-📥)
-- [Usage 🛠️](#usage-🛠️)
-- [Generated Types 🚧](#generated-types-🚧)
-- [Generated Hooks 🔍](#generated-hooks-🔍)
-- [Contributing 🤝](#contributing-🤝)
-- [License 📜](#license-📜)
-
-## Features ⭐️
-
-- Automatically generates TypeScript types and React Query hooks for your Supabase database.
-- Reduces manual work and the likelihood of errors.
-- Increases developer productivity by providing ready-to-use hooks for fetching data.
-
-## Installation 📥
-
-Install the package globally using npm:
+## Installation
 
 ```bash
-npm install -g supabase-react-query-codegen
+npm install -g supabase-tanstack-zod-codegen
 ```
 
-Or with Yarn:
+Or with yarn:
 
 ```bash
-yarn global add supabase-react-query-codegen
+yarn global add supabase-tanstack-zod-codegen
 ```
 
-## Usage 🛠️
+## Requirements
 
-1. First, generate a TypeScript types file for your Supabase database (if you haven't already):
+Your project needs these peer dependencies:
 
 ```bash
-supabase gen types typescript --project-id "<your-project-id>" --schema public > path/to/types.ts
+npm install @supabase/supabase-js @tanstack/react-query zod
 ```
 
-2. Create a `supabase-react-query-codegen.config.json` file with the following properties:
-```json5
+## Usage
+
+### 1. Generate Supabase types
+
+```bash
+supabase gen types typescript --project-id "<your-project-id>" --schema public > src/database.types.ts
+```
+
+### 2. Create config file
+
+Create `codegen.config.json`:
+
+```json
 {
-  // required
-  "outputPath": "src/generated.ts", // path where generated code will go
-  "typesPath": "src/types.ts", // path to your types file generated in step 1
-
-  // optional
-  "prettierConfigPath": ".prettierrc", // path to your .prettierrc file
-  "relativeSupabasePath": "./supabase", // where your supabase client is relative to your generated file
-  "supabaseExportName": "supabase", // if not supplied, default will be imported in your generated file
+  "outputPath": "src/generated.ts",
+  "typesPath": "src/database.types.ts",
+  "relativeSupabasePath": "./supabase",
+  "supabaseExportName": "supabase",
+  "prettierConfigPath": ".prettierrc"
 }
 ```
 
-3. Run the `generate` command, passing in the required arguments:
+### 3. Run the generator
 
 ```bash
-npx supabase-react-query-codegen generate supabase-react-query-codegen.config.json
+npx supabase-tanstack-zod-codegen generate codegen.config.json
 ```
 
-## Generated Types 🚧
+## Generated Output
 
-For convenience this tool also generates types from your Database schema.
-The following types will be generated for each table in your database, if you have a table called `todo_items` then you will get these types:
+For a table called `todo_items`, the following will be generated:
 
-- `TodoItem`
-- `AddTodoItemRequest`
-- `UpdateTodoItemRequest`
+### Zod Schemas
 
-### Alternatives 🔄
+```typescript
+export const TodoItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  created_at: z.string(),
+});
 
-This project has been developed in collaboration with the [Better Supabase Types](https://github.com/FroggyPanda/better-supabase-types) CLI tool made by [FroggyPanda](https://github.com/FroggyPanda). If you don't use React Query but like the types generation part of this tool, it may be worth checking them out! ❤️
+export const AddTodoItemRequestSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  id: z.string().optional(),
+  created_at: z.string().optional(),
+});
 
-## Generated Hooks 🔍
+export const UpdateTodoItemRequestSchema = z
+  .object({
+    name: z.string().optional(),
+    description: z.string().optional(),
+    created_at: z.string().optional(),
+  })
+  .extend({ id: z.string() });
+```
 
-The following hooks will be generated for each table in your database, if you have a table called `todo_items` then you will get these hooks:
+### Types (derived from Zod)
 
-- `useGetTodoItem`: Fetch a single row by its ID.
-- `useGetAllTodoItems`: Fetch all rows in the table.
-- `useAddTodoItem`: Add a new row to the table.
-- `useUpdateTodoItem`: Update an existing row in the table.
-- `useDeleteTodoItem`: Delete a row from the table by its ID.
+```typescript
+export type TodoItem = z.infer<typeof TodoItemSchema>;
+export type AddTodoItemRequest = z.infer<typeof AddTodoItemRequestSchema>;
+export type UpdateTodoItemRequest = z.infer<typeof UpdateTodoItemRequestSchema>;
+```
 
-Note that `todo_items` is converted to PascalCase in the hook names.
+### Hooks
 
-## Contributing 🤝
+```typescript
+// Fetch single item by ID
+useGetTodoItem(id: string)
 
-Contributions are welcome! If you find a bug or have a feature request, please open an issue on the GitHub repository. If you'd like to contribute code, feel free to fork the repository and submit a pull request.
+// Fetch all items
+useGetAllTodoItems()
 
-### Contributors 👥
+// Add new item (with Zod validation)
+useAddTodoItem()
 
-Get yourself added to this list by helping me out wherever you can!
+// Update item (with Zod validation)
+useUpdateTodoItem()
 
-- [@BarryMichaelDoyle](https://github.com/barrymichaeldoyle) (Founder)
-- [@FroggyPanda](https://github.com/FroggyPanda) (Collaborator)
-- [@pntrivedy](https://github.com/pntrivedy) (Collaborator)
-- [@MegsSwanepoel](https://github.com/MegsSwanepoel) (Banner Design)
-- [@SirGoaty](https://github.com/sirgoaty) (Research and Testing)
-- [@WagnerA117](https://github.com/WagnerA117) (Research and Testing)
+// Delete item by ID
+useDeleteTodoItem()
+```
 
-## License 📜
+## Example Usage
+
+```tsx
+import { useGetAllTodoItems, useAddTodoItem } from './generated';
+
+function TodoList() {
+  const { data: todos, isLoading } = useGetAllTodoItems();
+  const addTodo = useAddTodoItem();
+
+  const handleAdd = () => {
+    addTodo.mutate({
+      name: 'New Todo',
+      description: 'Description here',
+    });
+  };
+
+  if (isLoading) return <div>Loading...</div>;
+
+  return (
+    <ul>
+      {todos?.map((todo) => (
+        <li key={todo.id}>{todo.name}</li>
+      ))}
+      <button onClick={handleAdd}>Add Todo</button>
+    </ul>
+  );
+}
+```
+
+## Config Options
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `outputPath` | Yes | Path where generated code will be written |
+| `typesPath` | Yes | Path to Supabase generated types file |
+| `relativeSupabasePath` | No | Relative path to your Supabase client from the output file |
+| `supabaseExportName` | No | Name of your Supabase client export (default: `supabase`) |
+| `prettierConfigPath` | No | Path to your Prettier config for formatting |
+
+## License
 
 MIT

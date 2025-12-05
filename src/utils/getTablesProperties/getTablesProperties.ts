@@ -13,10 +13,32 @@ export function getTablesProperties(typesPath: string) {
 
   const sourceFile = project.addSourceFileAtPath(typesPath);
 
-  // Find the 'Tables' type alias
-  const databaseInterface = sourceFile.getInterfaceOrThrow('Database');
-  const publicProperty = databaseInterface.getPropertyOrThrow('public');
-  const publicType = publicProperty.getType();
+  // Find the 'Database' - can be either interface or type alias
+  const databaseInterface = sourceFile.getInterface('Database');
+  const databaseTypeAlias = sourceFile.getTypeAlias('Database');
+
+  if (!databaseInterface && !databaseTypeAlias) {
+    throw new Error('No Database interface or type alias found in the types file.');
+  }
+
+  let publicType;
+  if (databaseInterface) {
+    const publicProperty = databaseInterface.getPropertyOrThrow('public');
+    publicType = publicProperty.getType();
+  } else {
+    // Handle type alias
+    const databaseType = databaseTypeAlias!.getType();
+    const publicProperty = databaseType
+      .getApparentProperties()
+      .find((prop) => prop.getName() === 'public');
+    if (!publicProperty) {
+      throw new Error('No public property found within the Database type.');
+    }
+    publicType = project
+      .getProgram()
+      .getTypeChecker()
+      .getTypeAtLocation(publicProperty.getValueDeclarationOrThrow());
+  }
 
   const tablesProperty = publicType
     .getApparentProperties()

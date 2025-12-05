@@ -1,68 +1,25 @@
-import type { Symbol } from 'ts-morph';
-
 import { toTypeName } from './toTypeName';
+import { toZodSchemaName } from '../generateZodSchemas/toZodSchemaName';
 
 interface GenerateTypesArg {
-  table: Symbol;
   tableName: string;
 }
 
-export function generateTypes({
-  tableName,
-  table,
-}: GenerateTypesArg): string[] {
-  // Get the table type
-  const tableType = table.getTypeAtLocation(table.getValueDeclarationOrThrow());
-
-  // Find the 'Row' property within the table type
-  const rowProperty = tableType.getProperty('Row');
-  if (!rowProperty) {
-    throw new Error(`Unable to find Row property type for ${tableName}.`);
-  }
-
-  // Get the type of the 'Row' property
-  const rowType = rowProperty.getTypeAtLocation(
-    rowProperty.getValueDeclarationOrThrow()
-  );
-
-  const insertProperty = tableType.getProperty('Insert');
-  if (!insertProperty) {
-    throw new Error(`Unable to find insert property type for ${tableName}.`);
-  }
-
-  const insertType = insertProperty.getTypeAtLocation(
-    insertProperty.getValueDeclarationOrThrow()
-  );
-
-  const updateProperty = tableType.getProperty('Update');
-  if (!updateProperty) {
-    throw new Error(`Unable to find update property type for ${tableName}.`);
-  }
-
-  const updateType = updateProperty.getTypeAtLocation(
-    updateProperty.getValueDeclarationOrThrow()
-  );
-
-  const rowTypeString = rowType.getText();
-  const insertTypeString = insertType.getText();
-  const updateTypeString = updateType.getText();
-
+export function generateTypes({ tableName }: GenerateTypesArg): string[] {
   const types: string[] = [];
 
+  const getTypeName = toTypeName({ operation: 'Get', tableName });
+  const addTypeName = toTypeName({ operation: 'Add', tableName });
+  const updateTypeName = toTypeName({ operation: 'Update', tableName });
+
+  const getSchemaName = toZodSchemaName({ operation: 'Get', tableName });
+  const addSchemaName = toZodSchemaName({ operation: 'Add', tableName });
+  const updateSchemaName = toZodSchemaName({ operation: 'Update', tableName });
+
   types.push(
-    `export type ${toTypeName({
-      operation: 'Get',
-      tableName,
-    })} = ${rowTypeString};`,
-    `export type ${toTypeName({
-      operation: 'Add',
-      tableName,
-    })} = ${insertTypeString};`,
-    `export type ${toTypeName({
-      operation: 'Update',
-      tableName,
-    })} = { id: string; changes: ${updateTypeString} };
-    `
+    `export type ${getTypeName} = z.infer<typeof ${getSchemaName}>;`,
+    `export type ${addTypeName} = z.infer<typeof ${addSchemaName}>;`,
+    `export type ${updateTypeName} = z.infer<typeof ${updateSchemaName}>;`
   );
 
   return types;

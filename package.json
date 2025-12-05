@@ -1,15 +1,13 @@
 {
-  "name": "supabase-react-query-codegen",
-  "version": "1.1.0",
-  "description": "A CLI tool to automatically generate React Query hooks and TypeScript types for your Supabase Database, streamlining data fetching and enhancing developer productivity.",
-  "main": "index.js",
+  "name": "supabase-tanstack-zod-codegen",
+  "version": "1.0.1",
+  "description": "A CLI tool to automatically generate TanStack Query hooks, Zod schemas, and TypeScript types for your Supabase Database.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "private": false,
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/barrymichaeldoyle/supabase-react-query-codegen.git"
-  },
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build && npm run test",
     "lint": "eslint --cache \"src/**/*.{js,ts}\"",
     "lint:fix": "eslint --cache --fix \"src/**/*.{js,ts}\"",
     "test": "jest",
@@ -21,8 +19,13 @@
     "test:watch": "jest --watch"
   },
   "bin": {
-    "supabase-react-query-codegen": "dist/cli.js"
+    "supabase-tanstack-zod-codegen": "dist/cli.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "keywords": [
     "code-generation",
     "react-hooks",
@@ -30,17 +33,24 @@
     "typescript",
     "database",
     "automatic",
+    "tanstack-query",
     "react-query",
+    "zod",
+    "validation",
     "crud",
     "utilities",
     "developer-tools"
   ],
-  "author": "Barry Michael Doyle <barry@barrymichaeldoyle.com>",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/barrymichaeldoyle/supabase-react-query-codegen/issues"
+  "author": "Omer Yucel <me@omeryucel.dev>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omerycll/supabase-tanstack-zod-codegen.git"
   },
-  "homepage": "https://github.com/barrymichaeldoyle/supabase-react-query-codegen#readme",
+  "bugs": {
+    "url": "https://github.com/omerycll/supabase-tanstack-zod-codegen/issues"
+  },
+  "homepage": "https://github.com/omerycll/supabase-tanstack-zod-codegen#readme",
+  "license": "MIT",
   "dependencies": {
     "pluralize": "^8.0.0",
     "prettier": "^2.8.8",
@@ -49,7 +59,8 @@
   },
   "peerDependencies": {
     "@supabase/supabase-js": "^2.20.0",
-    "react-query": "^3.39.3"
+    "@tanstack/react-query": "^5.0.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",

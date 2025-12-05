@@ -4,6 +4,7 @@ import path from 'path';
 import { getTablesProperties } from './utils/getTablesProperties/getTablesProperties';
 import { generateTypes } from './utils/generateTypes/generateTypes';
 import { generateHooks } from './utils/generateHooks/generateHooks';
+import { generateZodSchemas } from './utils/generateZodSchemas/generateZodSchemas';
 import { formatGeneratedContent } from './utils/formatGeneratedContent/formatGeneratedContent';
 import { importSupabase } from './utils/importSupabase/importSupabase';
 
@@ -35,18 +36,23 @@ export default async function generate({
   // Iterate through table keys and generate hooks
   const hooks: string[] = [];
   const types: string[] = [];
+  const zodSchemas: string[] = [];
 
   for (const table of tablesProperties) {
     const tableName = table.getName();
 
+    zodSchemas.push(...generateZodSchemas({ table, tableName }));
+    types.push(...generateTypes({ tableName }));
     hooks.push(...generateHooks({ supabaseExportName, tableName }));
-    types.push(...generateTypes({ table, tableName }));
   }
 
   // Create the output file content with imports and hooks
   const generatedFileContent = `
-import { useMutation, useQuery, useQueryClient } from 'react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
 ${importSupabase({ relativeSupabasePath, supabaseExportName })}
+
+${zodSchemas.join('\n\n')}
 
 ${types.join('\n')}
 
