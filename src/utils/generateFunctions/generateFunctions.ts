@@ -8,9 +8,38 @@ interface GenerateFunctionsArg {
   project: Project;
 }
 
+function isJsonType(type: Type): boolean {
+  // Detect Supabase Json type: string | number | boolean | null | { [key: string]: Json } | Json[]
+  // This is a recursive type that causes infinite nesting
+  if (!type.isUnion()) return false;
+
+  const unionTypes = type.getUnionTypes();
+  const nonNullTypes = unionTypes.filter((t) => !t.isNull() && !t.isUndefined());
+
+  // Json type typically has: string, number, boolean, object (with index signature), array
+  const hasString = nonNullTypes.some((t) => t.isString());
+  const hasNumber = nonNullTypes.some((t) => t.isNumber());
+  const hasBoolean = nonNullTypes.some((t) => t.isBoolean());
+  const hasArray = nonNullTypes.some((t) => t.isArray());
+  const hasObject = nonNullTypes.some((t) => t.isObject() && !t.isArray());
+
+  // If it has string, number, boolean plus array OR object, it's likely Json
+  // More permissive check since Json can appear in different variations
+  if (hasString && hasNumber && hasBoolean && (hasArray || hasObject)) {
+    return true;
+  }
+
+  // Also check if we have 4+ types in the union (typical of Json)
+  if (nonNullTypes.length >= 4 && hasString && hasNumber && hasBoolean) {
+    return true;
+  }
+
+  return false;
+}
+
 function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
-  // Prevent infinite recursion
-  if (depth > 10) {
+  // Prevent infinite recursion - use a low depth since Json type recurses quickly
+  if (depth > 2) {
     return isOptional ? 'z.unknown().optional()' : 'z.unknown()';
   }
 
@@ -24,12 +53,26 @@ function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
     return 'z.undefined()';
   }
 
+  // Detect Json type early and return z.unknown() to avoid infinite recursion
+  if (isJsonType(type)) {
+    return isOptional ? 'z.unknown().nullable().optional()' : 'z.unknown().nullable()';
+  }
+
   // Handle union types (e.g., string | null, number | undefined)
   if (type.isUnion()) {
     const unionTypes = type.getUnionTypes();
     const hasNull = unionTypes.some((t) => t.isNull());
     const hasUndefined = unionTypes.some((t) => t.isUndefined());
     const nonNullUndefinedTypes = unionTypes.filter((t) => !t.isNull() && !t.isUndefined());
+
+    // Check if any of the non-null types is a Json-like type
+    // If the inner type is also a complex union, treat it as Json
+    if (nonNullUndefinedTypes.length === 1 && isJsonType(nonNullUndefinedTypes[0])) {
+      let schema = 'z.unknown()';
+      if (hasNull) schema += '.nullable()';
+      if (hasUndefined || isOptional) schema += '.optional()';
+      return schema;
+    }
 
     // Check if it's a string literal union (enum-like)
     const stringLiterals = nonNullUndefinedTypes.filter((t) => t.isStringLiteral());
@@ -48,13 +91,12 @@ function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
       return baseSchema;
     }
 
-    // Multiple non-null/undefined types - create a union
+    // Multiple non-null/undefined types - this is likely Json, just return unknown
     if (nonNullUndefinedTypes.length > 1) {
-      const schemas = nonNullUndefinedTypes.map((t) => typeToZodSchema(t, false, depth + 1));
-      let unionSchema = `z.union([${schemas.join(', ')}])`;
-      if (hasNull) unionSchema = `${unionSchema}.nullable()`;
-      if (hasUndefined || isOptional) unionSchema = `${unionSchema}.optional()`;
-      return unionSchema;
+      let schema = 'z.unknown()';
+      if (hasNull) schema += '.nullable()';
+      if (hasUndefined || isOptional) schema += '.optional()';
+      return schema;
     }
   }
 
