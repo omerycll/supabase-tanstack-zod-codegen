@@ -8,9 +8,12 @@ A CLI tool to automatically generate TanStack Query (React Query v5) hooks, Zod 
 - Generates Zod v4 schemas for runtime validation
 - TypeScript types derived from Zod schemas using `z.infer`
 - Automatic cache invalidation on mutations
-- **Filter & Pagination support** for `useGetAll` hooks
+- **Filter, Pagination & Select** support for `useGetAll` hooks
+- **Mutations return data** - `useAdd` and `useUpdate` return the created/updated record
+- **Bulk operations** - `useBulkAdd`, `useBulkUpdate`, `useBulkDelete` hooks
 - **Database Functions (RPC)** support with auto-generated hooks
 - **Database Enums** support with Zod schemas
+- **Optimized queries** - Single query for count + data (no extra requests)
 - Works with both `interface Database` and `type Database` (new Supabase format)
 
 ## Installation
@@ -107,17 +110,22 @@ export type UpdateTodoItemRequest = z.infer<typeof UpdateTodoItemRequestSchema>;
 // Fetch single item by ID
 useGetTodoItem(id: string)
 
-// Fetch all items with filter, sort and pagination
+// Fetch all items with filter, sort, pagination and select
 useGetAllTodoItems(options?: QueryOptions)
 
-// Add new item (with Zod validation)
+// Add new item (returns created record)
 useAddTodoItem()
 
-// Update item (with Zod validation)
+// Update item (returns updated record)
 useUpdateTodoItem()
 
 // Delete item by ID
 useDeleteTodoItem()
+
+// Bulk operations
+useBulkAddTodoItems()    // Insert multiple records
+useBulkUpdateTodoItems() // Update multiple records
+useBulkDeleteTodoItems() // Delete multiple records
 ```
 
 ### Database Functions (RPC)
@@ -236,6 +244,15 @@ const { data } = useGetAllTodoItems({
 });
 ```
 
+### Select Specific Fields
+
+```tsx
+// Only fetch specific columns (reduces bandwidth)
+const { data } = useGetAllTodoItems({
+  select: 'id,name,created_at'
+});
+```
+
 ### Combined Example
 
 ```tsx
@@ -298,12 +315,75 @@ function TodoListWithPagination() {
 }
 ```
 
+## Mutations Return Data
+
+`useAdd` and `useUpdate` hooks return the created/updated record:
+
+```tsx
+const addTodo = useAddTodoItem();
+const updateTodo = useUpdateTodoItem();
+
+// Add returns the created record
+const handleAdd = async () => {
+  const newTodo = await addTodo.mutateAsync({
+    name: 'New Todo',
+    description: 'Description here',
+  });
+  console.log('Created:', newTodo.id); // Access the new record immediately
+};
+
+// Update returns the updated record
+const handleUpdate = async () => {
+  const updated = await updateTodo.mutateAsync({
+    id: 'todo-123',
+    name: 'Updated Name',
+  });
+  console.log('Updated:', updated.name);
+};
+```
+
+## Bulk Operations
+
+Perform operations on multiple records at once:
+
+```tsx
+const bulkAdd = useBulkAddTodoItems();
+const bulkUpdate = useBulkUpdateTodoItems();
+const bulkDelete = useBulkDeleteTodoItems();
+
+// Add multiple records
+const handleBulkAdd = async () => {
+  const newTodos = await bulkAdd.mutateAsync([
+    { name: 'Todo 1', description: 'First' },
+    { name: 'Todo 2', description: 'Second' },
+    { name: 'Todo 3', description: 'Third' },
+  ]);
+  console.log(`Created ${newTodos.length} todos`);
+};
+
+// Update multiple records
+const handleBulkUpdate = async () => {
+  const updated = await bulkUpdate.mutateAsync([
+    { id: 'id-1', name: 'Updated 1' },
+    { id: 'id-2', name: 'Updated 2' },
+  ]);
+  console.log(`Updated ${updated.length} todos`);
+};
+
+// Delete multiple records
+const handleBulkDelete = async () => {
+  await bulkDelete.mutateAsync(['id-1', 'id-2', 'id-3']);
+  console.log('Deleted 3 todos');
+};
+```
+
 ## Example Usage
 
 ```tsx
 import {
   useGetAllTodoItems,
   useAddTodoItem,
+  useBulkAddTodoItems,
   useGetUserTodos
 } from './generated';
 
@@ -313,15 +393,17 @@ function TodoList() {
     pagination: { page: 1, pageSize: 20 }
   });
   const addTodo = useAddTodoItem();
+  const bulkAdd = useBulkAddTodoItems();
 
   // Using RPC function
   const { data: userTodos } = useGetUserTodos({ user_id: 'user-123' });
 
-  const handleAdd = () => {
-    addTodo.mutate({
+  const handleAdd = async () => {
+    const newTodo = await addTodo.mutateAsync({
       name: 'New Todo',
       description: 'Description here',
     });
+    console.log('Created todo with id:', newTodo.id);
   };
 
   if (isLoading) return <div>Loading...</div>;
@@ -385,6 +467,7 @@ interface QueryOptions {
   filters?: FilterCondition[];
   sort?: SortOption;
   pagination?: Pagination;
+  select?: string; // e.g., 'id,name,created_at'
 }
 
 // Paginated response wrapper

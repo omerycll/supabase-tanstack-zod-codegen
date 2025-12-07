@@ -43,11 +43,12 @@ export const PaginationSchema = z.object({
 });
 export type Pagination = z.infer<typeof PaginationSchema>;
 
-// Query options combining filters, sorting, and pagination
+// Query options combining filters, sorting, pagination, and select
 export const QueryOptionsSchema = z.object({
   filters: z.array(FilterConditionSchema).optional(),
   sort: SortOptionSchema.optional(),
   pagination: PaginationSchema.optional(),
+  select: z.string().optional(),
 });
 export type QueryOptions = z.infer<typeof QueryOptionsSchema>;
 
@@ -210,22 +211,16 @@ export function useGetAllTodoItems(options?: QueryOptions) {
   return useQuery<PaginatedResponse<TodoItem>, Error>({
     queryKey: ['todo_items', options],
     queryFn: async () => {
-      const { filters, sort, pagination } = options || {};
+      const { filters, sort, pagination, select: selectFields } = options || {};
       const page = pagination?.page || 1;
       const pageSize = pagination?.pageSize || 10;
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // Get total count
-      let countQuery = supabase
+      // Single query with count and data
+      let query = supabase
         .from('todo_items')
-        .select('*', { count: 'exact', head: true });
-      countQuery = applyFilters(countQuery, filters);
-      const { count } = await countQuery;
-      const total = count || 0;
-
-      // Get paginated data
-      let query = supabase.from('todo_items').select('*');
+        .select(selectFields || '*', { count: 'exact' });
       query = applyFilters(query, filters);
 
       if (sort) {
@@ -236,8 +231,10 @@ export function useGetAllTodoItems(options?: QueryOptions) {
 
       query = query.range(from, to);
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
       if (error) throw error;
+
+      const total = count || 0;
 
       return {
         data: data as TodoItem[],
@@ -257,11 +254,13 @@ export function useAddTodoItem() {
   return useMutation({
     mutationFn: async (item: AddTodoItemRequest) => {
       const validated = AddTodoItemRequestSchema.parse(item);
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('todo_items')
-        .insert(validated as never);
+        .insert(validated as never)
+        .select()
+        .single();
       if (error) throw error;
-      return null;
+      return data as TodoItem;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['todo_items'] });
@@ -274,12 +273,14 @@ export function useUpdateTodoItem() {
   return useMutation({
     mutationFn: async (item: UpdateTodoItemRequest) => {
       const { id, ...updates } = UpdateTodoItemRequestSchema.parse(item);
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('todo_items')
         .update(updates as never)
-        .eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
       if (error) throw error;
-      return null;
+      return data as TodoItem;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['todo_items'] });
@@ -292,6 +293,67 @@ export function useDeleteTodoItem() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('todo_items').delete().eq('id', id);
+      if (error) throw error;
+      return null;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['todo_items'] });
+    },
+  });
+}
+
+export function useBulkAddTodoItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (items: AddTodoItemRequest[]) => {
+      const validated = items.map((item) =>
+        AddTodoItemRequestSchema.parse(item)
+      );
+      const { data, error } = await supabase
+        .from('todo_items')
+        .insert(validated as never)
+        .select();
+      if (error) throw error;
+      return data as TodoItem[];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['todo_items'] });
+    },
+  });
+}
+
+export function useBulkUpdateTodoItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (items: UpdateTodoItemRequest[]) => {
+      const results: TodoItem[] = [];
+      for (const item of items) {
+        const { id, ...updates } = UpdateTodoItemRequestSchema.parse(item);
+        const { data, error } = await supabase
+          .from('todo_items')
+          .update(updates as never)
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw error;
+        results.push(data as TodoItem);
+      }
+      return results;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['todo_items'] });
+    },
+  });
+}
+
+export function useBulkDeleteTodoItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from('todo_items')
+        .delete()
+        .in('id', ids);
       if (error) throw error;
       return null;
     },
@@ -322,22 +384,16 @@ export function useGetAllProfiles(options?: QueryOptions) {
   return useQuery<PaginatedResponse<Profile>, Error>({
     queryKey: ['profiles', options],
     queryFn: async () => {
-      const { filters, sort, pagination } = options || {};
+      const { filters, sort, pagination, select: selectFields } = options || {};
       const page = pagination?.page || 1;
       const pageSize = pagination?.pageSize || 10;
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // Get total count
-      let countQuery = supabase
+      // Single query with count and data
+      let query = supabase
         .from('profiles')
-        .select('*', { count: 'exact', head: true });
-      countQuery = applyFilters(countQuery, filters);
-      const { count } = await countQuery;
-      const total = count || 0;
-
-      // Get paginated data
-      let query = supabase.from('profiles').select('*');
+        .select(selectFields || '*', { count: 'exact' });
       query = applyFilters(query, filters);
 
       if (sort) {
@@ -348,8 +404,10 @@ export function useGetAllProfiles(options?: QueryOptions) {
 
       query = query.range(from, to);
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
       if (error) throw error;
+
+      const total = count || 0;
 
       return {
         data: data as Profile[],
@@ -369,11 +427,13 @@ export function useAddProfile() {
   return useMutation({
     mutationFn: async (item: AddProfileRequest) => {
       const validated = AddProfileRequestSchema.parse(item);
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
-        .insert(validated as never);
+        .insert(validated as never)
+        .select()
+        .single();
       if (error) throw error;
-      return null;
+      return data as Profile;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
@@ -386,12 +446,14 @@ export function useUpdateProfile() {
   return useMutation({
     mutationFn: async (item: UpdateProfileRequest) => {
       const { id, ...updates } = UpdateProfileRequestSchema.parse(item);
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .update(updates as never)
-        .eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
       if (error) throw error;
-      return null;
+      return data as Profile;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
@@ -404,6 +466,64 @@ export function useDeleteProfile() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) throw error;
+      return null;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+    },
+  });
+}
+
+export function useBulkAddProfiles() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (items: AddProfileRequest[]) => {
+      const validated = items.map((item) =>
+        AddProfileRequestSchema.parse(item)
+      );
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert(validated as never)
+        .select();
+      if (error) throw error;
+      return data as Profile[];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+    },
+  });
+}
+
+export function useBulkUpdateProfiles() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (items: UpdateProfileRequest[]) => {
+      const results: Profile[] = [];
+      for (const item of items) {
+        const { id, ...updates } = UpdateProfileRequestSchema.parse(item);
+        const { data, error } = await supabase
+          .from('profiles')
+          .update(updates as never)
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw error;
+        results.push(data as Profile);
+      }
+      return results;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+    },
+  });
+}
+
+export function useBulkDeleteProfiles() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.from('profiles').delete().in('id', ids);
       if (error) throw error;
       return null;
     },

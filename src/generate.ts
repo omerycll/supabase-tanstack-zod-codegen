@@ -94,11 +94,12 @@ export const PaginationSchema = z.object({
 });
 export type Pagination = z.infer<typeof PaginationSchema>;
 
-// Query options combining filters, sorting, and pagination
+// Query options combining filters, sorting, pagination, and select
 export const QueryOptionsSchema = z.object({
   filters: z.array(FilterConditionSchema).optional(),
   sort: SortOptionSchema.optional(),
   pagination: PaginationSchema.optional(),
+  select: z.string().optional(),
 });
 export type QueryOptions = z.infer<typeof QueryOptionsSchema>;
 

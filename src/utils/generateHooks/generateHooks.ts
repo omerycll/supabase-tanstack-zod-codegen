@@ -90,20 +90,14 @@ export function generateHooks({
   return useQuery<PaginatedResponse<${getRowType}>, Error>({
     queryKey: ['${tableName}', options],
     queryFn: async () => {
-      const { filters, sort, pagination } = options || {};
+      const { filters, sort, pagination, select: selectFields } = options || {};
       const page = pagination?.page || 1;
       const pageSize = pagination?.pageSize || 10;
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // Get total count
-      let countQuery = ${supabase}.from('${tableName}').select('*', { count: 'exact', head: true });
-      countQuery = applyFilters(countQuery, filters);
-      const { count } = await countQuery;
-      const total = count || 0;
-
-      // Get paginated data
-      let query = ${supabase}.from('${tableName}').select('*');
+      // Single query with count and data
+      let query = ${supabase}.from('${tableName}').select(selectFields || '*', { count: 'exact' });
       query = applyFilters(query, filters);
 
       if (sort) {
@@ -112,8 +106,10 @@ export function generateHooks({
 
       query = query.range(from, to);
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
       if (error) throw error;
+
+      const total = count || 0;
 
       return {
         data: data as ${getRowType}[],
@@ -132,11 +128,13 @@ export function generateHooks({
   return useMutation({
     mutationFn: async (item: ${addRowType}) => {
       const validated = ${addSchema}.parse(item);
-      const { error } = await ${supabase}
+      const { data, error } = await ${supabase}
         .from('${tableName}')
-        .insert(validated as never);
+        .insert(validated as never)
+        .select()
+        .single();
       if (error) throw error;
-      return null;
+      return data as ${getRowType};
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['${tableName}'] });
@@ -148,12 +146,14 @@ export function generateHooks({
   return useMutation({
     mutationFn: async (item: ${updateRowType}) => {
       const { id, ...updates } = ${updateSchema}.parse(item);
-      const { error } = await ${supabase}
+      const { data, error } = await ${supabase}
         .from('${tableName}')
         .update(updates as never)
-        .eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
       if (error) throw error;
-      return null;
+      return data as ${getRowType};
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['${tableName}'] });
@@ -174,6 +174,65 @@ export function generateHooks({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['${tableName}'] });
     }
+  });
+}`,
+    // Bulk Add
+    `export function ${toHookName({ operation: 'BulkAdd', tableName })}() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (items: ${addRowType}[]) => {
+      const validated = items.map(item => ${addSchema}.parse(item));
+      const { data, error } = await ${supabase}
+        .from('${tableName}')
+        .insert(validated as never)
+        .select();
+      if (error) throw error;
+      return data as ${getRowType}[];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['${tableName}'] });
+    },
+  });
+}`,
+    // Bulk Update
+    `export function ${toHookName({ operation: 'BulkUpdate', tableName })}() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (items: ${updateRowType}[]) => {
+      const results: ${getRowType}[] = [];
+      for (const item of items) {
+        const { id, ...updates } = ${updateSchema}.parse(item);
+        const { data, error } = await ${supabase}
+          .from('${tableName}')
+          .update(updates as never)
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw error;
+        results.push(data as ${getRowType});
+      }
+      return results;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['${tableName}'] });
+    },
+  });
+}`,
+    // Bulk Delete
+    `export function ${toHookName({ operation: 'BulkDelete', tableName })}() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await ${supabase}
+        .from('${tableName}')
+        .delete()
+        .in('id', ids);
+      if (error) throw error;
+      return null;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['${tableName}'] });
+    },
   });
 }`
   );
