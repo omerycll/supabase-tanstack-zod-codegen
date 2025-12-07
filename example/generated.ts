@@ -2,6 +2,117 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { supabase } from './supabase';
 
+// Filter operators
+export const FilterOperatorSchema = z.enum([
+  'eq',
+  'neq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'like',
+  'ilike',
+  'is',
+  'in',
+]);
+export type FilterOperator = z.infer<typeof FilterOperatorSchema>;
+
+// Single filter condition
+export const FilterConditionSchema = z.object({
+  column: z.string(),
+  operator: FilterOperatorSchema,
+  value: z.unknown(),
+});
+export type FilterCondition = z.infer<typeof FilterConditionSchema>;
+
+// Sort direction
+export const SortDirectionSchema = z.enum(['asc', 'desc']);
+export type SortDirection = z.infer<typeof SortDirectionSchema>;
+
+// Sort option
+export const SortOptionSchema = z.object({
+  column: z.string(),
+  direction: SortDirectionSchema.optional().default('asc'),
+});
+export type SortOption = z.infer<typeof SortOptionSchema>;
+
+// Pagination options
+export const PaginationSchema = z.object({
+  page: z.number().min(1).optional().default(1),
+  pageSize: z.number().min(1).max(100).optional().default(10),
+});
+export type Pagination = z.infer<typeof PaginationSchema>;
+
+// Query options combining filters, sorting, and pagination
+export const QueryOptionsSchema = z.object({
+  filters: z.array(FilterConditionSchema).optional(),
+  sort: SortOptionSchema.optional(),
+  pagination: PaginationSchema.optional(),
+});
+export type QueryOptions = z.infer<typeof QueryOptionsSchema>;
+
+// Paginated response wrapper
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+function applyFilters<T>(query: T, filters?: FilterCondition[]): T {
+  if (!filters || filters.length === 0) return query;
+
+  let result = query as any;
+  for (const filter of filters) {
+    const { column, operator, value } = filter;
+    switch (operator) {
+      case 'eq':
+        result = result.eq(column, value);
+        break;
+      case 'neq':
+        result = result.neq(column, value);
+        break;
+      case 'gt':
+        result = result.gt(column, value);
+        break;
+      case 'gte':
+        result = result.gte(column, value);
+        break;
+      case 'lt':
+        result = result.lt(column, value);
+        break;
+      case 'lte':
+        result = result.lte(column, value);
+        break;
+      case 'like':
+        result = result.like(column, value);
+        break;
+      case 'ilike':
+        result = result.ilike(column, value);
+        break;
+      case 'is':
+        result = result.is(column, value);
+        break;
+      case 'in':
+        result = result.in(column, value as any[]);
+        break;
+    }
+  }
+  return result as T;
+}
+
+export const TodoStatusSchema = z.enum([
+  'pending',
+  'in_progress',
+  'completed',
+  'cancelled',
+]);
+
+export const PriorityLevelSchema = z.enum(['low', 'medium', 'high', 'urgent']);
+
 export const TodoItemSchema = z.object({
   created_at: z.string(),
   description: z.string(),
@@ -43,12 +154,40 @@ export const UpdateProfileRequestSchema = z
   })
   .extend({ id: z.string() });
 
+export const GetUserTodosArgsSchema = z.object({
+  user_id: z.string(),
+});
+
+export const GetUserTodosReturnsSchema = z.array(
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string(),
+    created_at: z.string(),
+  })
+);
+
+export const SearchTodosArgsSchema = z.object({
+  search_term: z.string(),
+  limit_count: z.number().optional(),
+});
+
+export const SearchTodosReturnsSchema = z.array(
+  z.object({ id: z.string(), name: z.string(), description: z.string() })
+);
+
+export type TodoStatus = z.infer<typeof TodoStatusSchema>;
+export type PriorityLevel = z.infer<typeof PriorityLevelSchema>;
 export type TodoItem = z.infer<typeof TodoItemSchema>;
 export type AddTodoItemRequest = z.infer<typeof AddTodoItemRequestSchema>;
 export type UpdateTodoItemRequest = z.infer<typeof UpdateTodoItemRequestSchema>;
 export type Profile = z.infer<typeof ProfileSchema>;
 export type AddProfileRequest = z.infer<typeof AddProfileRequestSchema>;
 export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequestSchema>;
+export type GetUserTodosArgs = z.infer<typeof GetUserTodosArgsSchema>;
+export type GetUserTodosReturns = z.infer<typeof GetUserTodosReturnsSchema>;
+export type SearchTodosArgs = z.infer<typeof SearchTodosArgsSchema>;
+export type SearchTodosReturns = z.infer<typeof SearchTodosReturnsSchema>;
 
 export function useGetTodoItem(id: string) {
   return useQuery<TodoItem, Error>({
@@ -67,13 +206,48 @@ export function useGetTodoItem(id: string) {
   });
 }
 
-export function useGetAllTodoItems() {
-  return useQuery<TodoItem[], Error>({
-    queryKey: ['todo_items'],
+export function useGetAllTodoItems(options?: QueryOptions) {
+  return useQuery<PaginatedResponse<TodoItem>, Error>({
+    queryKey: ['todo_items', options],
     queryFn: async () => {
-      const { data, error } = await supabase.from('todo_items').select();
+      const { filters, sort, pagination } = options || {};
+      const page = pagination?.page || 1;
+      const pageSize = pagination?.pageSize || 10;
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      // Get total count
+      let countQuery = supabase
+        .from('todo_items')
+        .select('*', { count: 'exact', head: true });
+      countQuery = applyFilters(countQuery, filters);
+      const { count } = await countQuery;
+      const total = count || 0;
+
+      // Get paginated data
+      let query = supabase.from('todo_items').select('*');
+      query = applyFilters(query, filters);
+
+      if (sort) {
+        query = query.order(sort.column, {
+          ascending: sort.direction === 'asc',
+        });
+      }
+
+      query = query.range(from, to);
+
+      const { data, error } = await query;
       if (error) throw error;
-      return data as TodoItem[];
+
+      return {
+        data: data as TodoItem[],
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
+        },
+      };
     },
   });
 }
@@ -144,13 +318,48 @@ export function useGetProfile(id: string) {
   });
 }
 
-export function useGetAllProfiles() {
-  return useQuery<Profile[], Error>({
-    queryKey: ['profiles'],
+export function useGetAllProfiles(options?: QueryOptions) {
+  return useQuery<PaginatedResponse<Profile>, Error>({
+    queryKey: ['profiles', options],
     queryFn: async () => {
-      const { data, error } = await supabase.from('profiles').select();
+      const { filters, sort, pagination } = options || {};
+      const page = pagination?.page || 1;
+      const pageSize = pagination?.pageSize || 10;
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      // Get total count
+      let countQuery = supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true });
+      countQuery = applyFilters(countQuery, filters);
+      const { count } = await countQuery;
+      const total = count || 0;
+
+      // Get paginated data
+      let query = supabase.from('profiles').select('*');
+      query = applyFilters(query, filters);
+
+      if (sort) {
+        query = query.order(sort.column, {
+          ascending: sort.direction === 'asc',
+        });
+      }
+
+      query = query.range(from, to);
+
+      const { data, error } = await query;
       if (error) throw error;
-      return data as Profile[];
+
+      return {
+        data: data as Profile[],
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
+        },
+      };
     },
   });
 }
@@ -200,6 +409,36 @@ export function useDeleteProfile() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
+    },
+  });
+}
+
+export function useGetUserTodos(args: GetUserTodosArgs) {
+  return useQuery({
+    queryKey: ['get_user_todos', args],
+    queryFn: async () => {
+      const validated = GetUserTodosArgsSchema.parse(args);
+      const { data, error } = await supabase.rpc(
+        'get_user_todos',
+        validated as never
+      );
+      if (error) throw error;
+      return GetUserTodosReturnsSchema.parse(data);
+    },
+  });
+}
+
+export function useSearchTodos(args: SearchTodosArgs) {
+  return useQuery({
+    queryKey: ['search_todos', args],
+    queryFn: async () => {
+      const validated = SearchTodosArgsSchema.parse(args);
+      const { data, error } = await supabase.rpc(
+        'search_todos',
+        validated as never
+      );
+      if (error) throw error;
+      return SearchTodosReturnsSchema.parse(data);
     },
   });
 }

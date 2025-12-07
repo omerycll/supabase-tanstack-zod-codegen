@@ -7,6 +7,51 @@ interface GenerateHooksArg {
   supabaseExportName?: string | false;
 }
 
+// Helper function to apply filters to a Supabase query
+export const applyFiltersHelper = `
+function applyFilters<T>(query: T, filters?: FilterCondition[]): T {
+  if (!filters || filters.length === 0) return query;
+
+  let result = query as any;
+  for (const filter of filters) {
+    const { column, operator, value } = filter;
+    switch (operator) {
+      case 'eq':
+        result = result.eq(column, value);
+        break;
+      case 'neq':
+        result = result.neq(column, value);
+        break;
+      case 'gt':
+        result = result.gt(column, value);
+        break;
+      case 'gte':
+        result = result.gte(column, value);
+        break;
+      case 'lt':
+        result = result.lt(column, value);
+        break;
+      case 'lte':
+        result = result.lte(column, value);
+        break;
+      case 'like':
+        result = result.like(column, value);
+        break;
+      case 'ilike':
+        result = result.ilike(column, value);
+        break;
+      case 'is':
+        result = result.is(column, value);
+        break;
+      case 'in':
+        result = result.in(column, value as any[]);
+        break;
+    }
+  }
+  return result as T;
+}
+`;
+
 export function generateHooks({
   supabaseExportName,
   tableName,
@@ -41,13 +86,44 @@ export function generateHooks({
     enabled: !!id
   });
 }`,
-    `export function ${toHookName({ operation: 'GetAll', tableName })}() {
-  return useQuery<${getRowType}[], Error>({
-    queryKey: ['${tableName}'],
+    `export function ${toHookName({ operation: 'GetAll', tableName })}(options?: QueryOptions) {
+  return useQuery<PaginatedResponse<${getRowType}>, Error>({
+    queryKey: ['${tableName}', options],
     queryFn: async () => {
-      const { data, error } = await ${supabase}.from('${tableName}').select();
+      const { filters, sort, pagination } = options || {};
+      const page = pagination?.page || 1;
+      const pageSize = pagination?.pageSize || 10;
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      // Get total count
+      let countQuery = ${supabase}.from('${tableName}').select('*', { count: 'exact', head: true });
+      countQuery = applyFilters(countQuery, filters);
+      const { count } = await countQuery;
+      const total = count || 0;
+
+      // Get paginated data
+      let query = ${supabase}.from('${tableName}').select('*');
+      query = applyFilters(query, filters);
+
+      if (sort) {
+        query = query.order(sort.column, { ascending: sort.direction === 'asc' });
+      }
+
+      query = query.range(from, to);
+
+      const { data, error } = await query;
       if (error) throw error;
-      return data as ${getRowType}[];
+
+      return {
+        data: data as ${getRowType}[],
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
+        },
+      };
     }
   });
 }`,

@@ -56,10 +56,32 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      get_user_todos: {
+        Args: {
+          user_id: string;
+        };
+        Returns: {
+          id: string;
+          name: string;
+          description: string;
+          created_at: string;
+        }[];
+      };
+      search_todos: {
+        Args: {
+          search_term: string;
+          limit_count?: number;
+        };
+        Returns: {
+          id: string;
+          name: string;
+          description: string;
+        }[];
+      };
     };
     Enums: {
-      [_ in never]: never;
+      todo_status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+      priority_level: 'low' | 'medium' | 'high' | 'urgent';
     };
     CompositeTypes: {
       [_ in never]: never;
