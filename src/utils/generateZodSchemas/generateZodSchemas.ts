@@ -7,8 +7,11 @@ interface GenerateZodSchemasArg {
   tableName: string;
 }
 
-function typeToZodSchema(type: Type, isOptional = false): string {
-  const typeText = type.getText();
+function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
+  // Prevent infinite recursion
+  if (depth > 10) {
+    return isOptional ? 'z.unknown().optional()' : 'z.unknown()';
+  }
 
   // Handle union types (e.g., string | null)
   if (type.isUnion()) {
@@ -17,8 +20,18 @@ function typeToZodSchema(type: Type, isOptional = false): string {
     const hasUndefined = unionTypes.some((t) => t.isUndefined());
     const nonNullTypes = unionTypes.filter((t) => !t.isNull() && !t.isUndefined());
 
+    // Check if it's a string literal union (enum-like)
+    const stringLiterals = nonNullTypes.filter((t) => t.isStringLiteral());
+    if (stringLiterals.length > 0 && stringLiterals.length === nonNullTypes.length) {
+      const values = stringLiterals.map((t) => t.getLiteralValue() as string);
+      let schema = `z.enum([${values.map((v) => `'${v}'`).join(', ')}])`;
+      if (hasNull) schema += '.nullable()';
+      if (hasUndefined || isOptional) schema += '.optional()';
+      return schema;
+    }
+
     if (nonNullTypes.length === 1) {
-      let schema = typeToZodSchema(nonNullTypes[0]);
+      let schema = typeToZodSchema(nonNullTypes[0], false, depth + 1);
       if (hasNull) schema += '.nullable()';
       if (hasUndefined || isOptional) schema += '.optional()';
       return schema;
@@ -26,13 +39,13 @@ function typeToZodSchema(type: Type, isOptional = false): string {
   }
 
   // Handle primitive types
-  if (type.isString()) {
+  if (type.isString() || type.isStringLiteral()) {
     return isOptional ? 'z.string().optional()' : 'z.string()';
   }
-  if (type.isNumber()) {
+  if (type.isNumber() || type.isNumberLiteral()) {
     return isOptional ? 'z.number().optional()' : 'z.number()';
   }
-  if (type.isBoolean()) {
+  if (type.isBoolean() || type.isBooleanLiteral()) {
     return isOptional ? 'z.boolean().optional()' : 'z.boolean()';
   }
   if (type.isNull()) {
@@ -42,16 +55,24 @@ function typeToZodSchema(type: Type, isOptional = false): string {
     return 'z.undefined()';
   }
 
-  // Handle Json type
-  if (typeText === 'Json' || typeText.includes('Json')) {
-    return isOptional ? 'z.unknown().optional()' : 'z.unknown()';
+  // Safe way to check type text without causing recursion
+  try {
+    const symbol = type.getSymbol() || type.getAliasSymbol();
+    const typeName = symbol?.getName() || '';
+
+    // Handle Json type
+    if (typeName === 'Json') {
+      return isOptional ? 'z.unknown().optional()' : 'z.unknown()';
+    }
+  } catch {
+    // Ignore errors from getText
   }
 
   // Handle arrays
   if (type.isArray()) {
     const elementType = type.getArrayElementType();
     if (elementType) {
-      const elementSchema = typeToZodSchema(elementType);
+      const elementSchema = typeToZodSchema(elementType, false, depth + 1);
       return isOptional ? `z.array(${elementSchema}).optional()` : `z.array(${elementSchema})`;
     }
   }

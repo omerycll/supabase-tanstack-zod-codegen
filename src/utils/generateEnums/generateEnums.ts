@@ -1,4 +1,4 @@
-import { Symbol, Project } from 'ts-morph';
+import type { Symbol, Project } from 'ts-morph';
 import { toPascalCase } from '../toPascalCase/toPascalCase';
 
 interface GenerateEnumsArg {
@@ -20,23 +20,29 @@ export function generateEnumSchemas({ enumSymbol, enumName, project }: GenerateE
   // Get union type values (e.g., 'pending' | 'in_progress' | 'completed')
   if (enumType.isUnion()) {
     const unionTypes = enumType.getUnionTypes();
-    const values = unionTypes.map((t) => {
-      const text = t.getText();
-      // Remove quotes from string literal types
-      if (text.startsWith('"') || text.startsWith("'")) {
-        return text;
+    const values: string[] = [];
+
+    for (const t of unionTypes) {
+      // Use safe methods to extract string literal values
+      if (t.isStringLiteral()) {
+        const value = t.getLiteralValue() as string;
+        values.push(`'${value}'`);
       }
-      return `'${text}'`;
-    });
-    schemas.push(`export const ${schemaName} = z.enum([${values.join(', ')}]);`);
-  } else {
-    // Fallback for non-union types
-    const text = enumType.getText();
-    if (text.startsWith('"') || text.startsWith("'")) {
-      schemas.push(`export const ${schemaName} = z.enum([${text}]);`);
+    }
+
+    if (values.length > 0) {
+      schemas.push(`export const ${schemaName} = z.enum([${values.join(', ')}]);`);
     } else {
+      // Fallback if no string literals found
       schemas.push(`export const ${schemaName} = z.string();`);
     }
+  } else if (enumType.isStringLiteral()) {
+    // Single string literal
+    const value = enumType.getLiteralValue() as string;
+    schemas.push(`export const ${schemaName} = z.enum(['${value}']);`);
+  } else {
+    // Fallback for non-union, non-string types
+    schemas.push(`export const ${schemaName} = z.string();`);
   }
 
   return schemas;

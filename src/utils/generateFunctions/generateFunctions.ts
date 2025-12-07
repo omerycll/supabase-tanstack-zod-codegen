@@ -1,4 +1,4 @@
-import { Symbol, Project } from 'ts-morph';
+import type { Symbol, Project, Type } from 'ts-morph';
 import { toPascalCase } from '../toPascalCase/toPascalCase';
 
 interface GenerateFunctionsArg {
@@ -8,45 +8,75 @@ interface GenerateFunctionsArg {
   project: Project;
 }
 
-function typeToZodSchema(type: any, isOptional: boolean): string {
-  const typeText = type.getText();
+function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
+  // Prevent infinite recursion
+  if (depth > 10) {
+    return isOptional ? 'z.unknown().optional()' : 'z.unknown()';
+  }
 
   // Handle null types
-  if (typeText === 'null') {
+  if (type.isNull()) {
     return 'z.null()';
+  }
+
+  // Handle undefined types
+  if (type.isUndefined()) {
+    return 'z.undefined()';
   }
 
   // Handle union types (e.g., string | null, number | undefined)
   if (type.isUnion()) {
     const unionTypes = type.getUnionTypes();
-    const hasNull = unionTypes.some((t: any) => t.getText() === 'null');
-    const hasUndefined = unionTypes.some((t: any) => t.getText() === 'undefined');
-    const nonNullUndefinedTypes = unionTypes.filter(
-      (t: any) => t.getText() !== 'null' && t.getText() !== 'undefined'
-    );
+    const hasNull = unionTypes.some((t) => t.isNull());
+    const hasUndefined = unionTypes.some((t) => t.isUndefined());
+    const nonNullUndefinedTypes = unionTypes.filter((t) => !t.isNull() && !t.isUndefined());
+
+    // Check if it's a string literal union (enum-like)
+    const stringLiterals = nonNullUndefinedTypes.filter((t) => t.isStringLiteral());
+    if (stringLiterals.length > 0 && stringLiterals.length === nonNullUndefinedTypes.length) {
+      const values = stringLiterals.map((t) => t.getLiteralValue() as string);
+      let schema = `z.enum([${values.map((v) => `'${v}'`).join(', ')}])`;
+      if (hasNull) schema += '.nullable()';
+      if (hasUndefined || isOptional) schema += '.optional()';
+      return schema;
+    }
 
     if (nonNullUndefinedTypes.length === 1) {
-      let baseSchema = typeToZodSchema(nonNullUndefinedTypes[0], false);
+      let baseSchema = typeToZodSchema(nonNullUndefinedTypes[0], false, depth + 1);
       if (hasNull) baseSchema = `${baseSchema}.nullable()`;
-      if (hasUndefined) baseSchema = `${baseSchema}.optional()`;
+      if (hasUndefined || isOptional) baseSchema = `${baseSchema}.optional()`;
       return baseSchema;
     }
 
     // Multiple non-null/undefined types - create a union
-    const schemas = nonNullUndefinedTypes.map((t: any) => typeToZodSchema(t, false));
-    let unionSchema = `z.union([${schemas.join(', ')}])`;
-    if (hasNull) unionSchema = `${unionSchema}.nullable()`;
-    if (hasUndefined) unionSchema = `${unionSchema}.optional()`;
-    return unionSchema;
+    if (nonNullUndefinedTypes.length > 1) {
+      const schemas = nonNullUndefinedTypes.map((t) => typeToZodSchema(t, false, depth + 1));
+      let unionSchema = `z.union([${schemas.join(', ')}])`;
+      if (hasNull) unionSchema = `${unionSchema}.nullable()`;
+      if (hasUndefined || isOptional) unionSchema = `${unionSchema}.optional()`;
+      return unionSchema;
+    }
+  }
+
+  // Handle primitive types using type checking methods (not getText)
+  if (type.isString() || type.isStringLiteral()) {
+    return isOptional ? 'z.string().optional()' : 'z.string()';
+  }
+  if (type.isNumber() || type.isNumberLiteral()) {
+    return isOptional ? 'z.number().optional()' : 'z.number()';
+  }
+  if (type.isBoolean() || type.isBooleanLiteral()) {
+    return isOptional ? 'z.boolean().optional()' : 'z.boolean()';
   }
 
   // Handle array types
   if (type.isArray()) {
     const elementType = type.getArrayElementType();
     if (elementType) {
-      return `z.array(${typeToZodSchema(elementType, false)})`;
+      const elementSchema = typeToZodSchema(elementType, false, depth + 1);
+      return isOptional ? `z.array(${elementSchema}).optional()` : `z.array(${elementSchema})`;
     }
-    return 'z.array(z.unknown())';
+    return isOptional ? 'z.array(z.unknown()).optional()' : 'z.array(z.unknown())';
   }
 
   // Handle object types
@@ -58,22 +88,12 @@ function typeToZodSchema(type: any, isOptional: boolean): string {
         const propName = prop.getName();
         const propType = prop.getTypeAtLocation(prop.getValueDeclarationOrThrow());
         const propIsOptional = prop.isOptional();
-        const zodType = typeToZodSchema(propType, propIsOptional);
+        const zodType = typeToZodSchema(propType, propIsOptional, depth + 1);
         fields.push(`${propName}: ${zodType}`);
       }
-      return `z.object({ ${fields.join(', ')} })`;
+      const objectSchema = `z.object({ ${fields.join(', ')} })`;
+      return isOptional ? `${objectSchema}.optional()` : objectSchema;
     }
-  }
-
-  // Handle primitive types
-  if (typeText === 'string') {
-    return isOptional ? 'z.string().optional()' : 'z.string()';
-  }
-  if (typeText === 'number') {
-    return isOptional ? 'z.number().optional()' : 'z.number()';
-  }
-  if (typeText === 'boolean') {
-    return isOptional ? 'z.boolean().optional()' : 'z.boolean()';
   }
 
   // Default fallback
