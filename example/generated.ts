@@ -155,27 +155,43 @@ export const UpdateProfileRequestSchema = z
   })
   .extend({ id: z.string() });
 
+export const GetUserProfileArgsSchema = z.object({
+  user_id: z.string(),
+});
+
+export const GetUserProfileReturnsSchema = z
+  .object({
+    id: z.string(),
+    first_name: z.string().nullable(),
+    last_name: z.string().nullable(),
+  })
+  .nullable();
+
 export const GetUserTodosArgsSchema = z.object({
   user_id: z.string(),
 });
 
-export const GetUserTodosReturnsSchema = z.array(
-  z.object({
-    id: z.string(),
-    name: z.string(),
-    description: z.string(),
-    created_at: z.string(),
-  })
-);
+export const GetUserTodosReturnsSchema = z
+  .array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      description: z.string(),
+      created_at: z.string(),
+    })
+  )
+  .nullable();
 
 export const SearchTodosArgsSchema = z.object({
   search_term: z.string(),
   limit_count: z.number().optional(),
 });
 
-export const SearchTodosReturnsSchema = z.array(
-  z.object({ id: z.string(), name: z.string(), description: z.string() })
-);
+export const SearchTodosReturnsSchema = z
+  .array(
+    z.object({ id: z.string(), name: z.string(), description: z.string() })
+  )
+  .nullable();
 
 export type TodoStatus = z.infer<typeof TodoStatusSchema>;
 export type PriorityLevel = z.infer<typeof PriorityLevelSchema>;
@@ -185,6 +201,8 @@ export type UpdateTodoItemRequest = z.infer<typeof UpdateTodoItemRequestSchema>;
 export type Profile = z.infer<typeof ProfileSchema>;
 export type AddProfileRequest = z.infer<typeof AddProfileRequestSchema>;
 export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequestSchema>;
+export type GetUserProfileArgs = z.infer<typeof GetUserProfileArgsSchema>;
+export type GetUserProfileReturns = z.infer<typeof GetUserProfileReturnsSchema>;
 export type GetUserTodosArgs = z.infer<typeof GetUserTodosArgsSchema>;
 export type GetUserTodosReturns = z.infer<typeof GetUserTodosReturnsSchema>;
 export type SearchTodosArgs = z.infer<typeof SearchTodosArgsSchema>;
@@ -529,6 +547,21 @@ export function useBulkDeleteProfiles() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
+    },
+  });
+}
+
+export function useGetUserProfile(args: GetUserProfileArgs) {
+  return useQuery({
+    queryKey: ['get_user_profile', args],
+    queryFn: async () => {
+      const validated = GetUserProfileArgsSchema.parse(args);
+      const { data, error } = await supabase.rpc(
+        'get_user_profile',
+        validated as never
+      );
+      if (error) throw error;
+      return GetUserProfileReturnsSchema.parse(data);
     },
   });
 }

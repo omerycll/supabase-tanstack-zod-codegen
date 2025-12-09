@@ -56,6 +56,16 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      get_user_profile: {
+        Args: {
+          user_id: string;
+        };
+        Returns: {
+          id: string;
+          first_name: string | null;
+          last_name: string | null;
+        };
+      };
       get_user_todos: {
         Args: {
           user_id: string;

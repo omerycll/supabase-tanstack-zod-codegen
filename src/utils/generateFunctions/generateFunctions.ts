@@ -176,6 +176,7 @@ export function generateFunctionSchemas({ func, functionName, project }: Generat
   }
 
   // Get Returns type
+  // Function returns can always be null, so we always add .nullable()
   const returnsProperty = funcType.getProperty('Returns');
   if (returnsProperty) {
     const returnsType = project
@@ -184,9 +185,9 @@ export function generateFunctionSchemas({ func, functionName, project }: Generat
       .getTypeAtLocation(returnsProperty.getValueDeclarationOrThrow());
 
     const zodSchema = typeToZodSchema(returnsType, false);
-    schemas.push(`export const ${returnsSchemaName} = ${zodSchema};`);
+    schemas.push(`export const ${returnsSchemaName} = ${zodSchema}.nullable();`);
   } else {
-    schemas.push(`export const ${returnsSchemaName} = z.unknown();`);
+    schemas.push(`export const ${returnsSchemaName} = z.unknown().nullable();`);
   }
 
   return schemas;
