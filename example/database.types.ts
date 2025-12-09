@@ -66,6 +66,15 @@ export type Database = {
           last_name: string | null;
         };
       };
+      create_todo: {
+        Args: {
+          name: string;
+          description: string;
+        };
+        Returns: {
+          id: string;
+        };
+      };
       get_user_todos: {
         Args: {
           user_id: string;

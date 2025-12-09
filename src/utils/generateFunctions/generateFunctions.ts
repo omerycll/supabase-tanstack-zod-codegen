@@ -206,6 +206,12 @@ export function generateFunctionTypes({ functionName }: { functionName: string }
   ];
 }
 
+function isMutationFunction(functionName: string): boolean {
+  const mutationPrefixes = ['create', 'update', 'delete'];
+  const lowerName = functionName.toLowerCase();
+  return mutationPrefixes.some((prefix) => lowerName.startsWith(prefix));
+}
+
 export function generateFunctionHooks({ functionName, supabaseExportName }: { functionName: string; supabaseExportName?: string }): string[] {
   const supabase = supabaseExportName || 'supabase';
   const pascalName = toPascalCase(functionName);
@@ -216,8 +222,21 @@ export function generateFunctionHooks({ functionName, supabaseExportName }: { fu
 
   const hooks: string[] = [];
 
-  // Generate useQuery hook for RPC function
-  hooks.push(`export function ${hookName}(args: ${argsTypeName}) {
+  if (isMutationFunction(functionName)) {
+    // Generate useMutation hook for create/update/delete functions
+    hooks.push(`export function ${hookName}() {
+  return useMutation({
+    mutationFn: async (args: ${argsTypeName}) => {
+      const validated = ${argsSchemaName}.parse(args);
+      const { data, error } = await ${supabase}.rpc('${functionName}', validated as never);
+      if (error) throw error;
+      return ${returnsSchemaName}.parse(data);
+    },
+  });
+}`);
+  } else {
+    // Generate useQuery hook for get/search and other functions
+    hooks.push(`export function ${hookName}(args: ${argsTypeName}) {
   return useQuery({
     queryKey: ['${functionName}', args],
     queryFn: async () => {
@@ -228,6 +247,7 @@ export function generateFunctionHooks({ functionName, supabaseExportName }: { fu
     },
   });
 }`);
+  }
 
   return hooks;
 }

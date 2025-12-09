@@ -130,6 +130,21 @@ useBulkDeleteTodoItems() // Delete multiple records
 
 ### Database Functions (RPC)
 
+Database functions automatically generate either `useQuery` or `useMutation` hooks based on the function name:
+
+| Prefix | Hook Type | Example |
+|--------|-----------|---------|
+| `get_*` | `useQuery` | `get_user_todos` → `useGetUserTodos(args)` |
+| `search_*` | `useQuery` | `search_todos` → `useSearchTodos(args)` |
+| `create_*` | `useMutation` | `create_todo` → `useCreateTodo()` |
+| `update_*` | `useMutation` | `update_todo` → `useUpdateTodo()` |
+| `delete_*` | `useMutation` | `delete_todo` → `useDeleteTodo()` |
+| Other | `useQuery` | `calculate_total` → `useCalculateTotal(args)` |
+
+> **Note:** All function return schemas include `.nullable()` since Supabase RPC calls can return `null`.
+
+#### Query Function Example
+
 For a Supabase function like:
 
 ```sql
@@ -152,13 +167,13 @@ export const GetUserTodosReturnsSchema = z.array(
     description: z.string(),
     created_at: z.string(),
   })
-);
+).nullable();
 
 // Types
 export type GetUserTodosArgs = z.infer<typeof GetUserTodosArgsSchema>;
 export type GetUserTodosReturns = z.infer<typeof GetUserTodosReturnsSchema>;
 
-// Hook
+// Hook (useQuery for get_* functions)
 export function useGetUserTodos(args: GetUserTodosArgs) {
   return useQuery({
     queryKey: ['get_user_todos', args],
@@ -170,6 +185,59 @@ export function useGetUserTodos(args: GetUserTodosArgs) {
     },
   });
 }
+```
+
+#### Mutation Function Example
+
+For a Supabase function like:
+
+```sql
+CREATE FUNCTION create_todo(name text, description text)
+RETURNS uuid
+```
+
+The following will be generated:
+
+```typescript
+// Zod Schemas
+export const CreateTodoArgsSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+});
+
+export const CreateTodoReturnsSchema = z.string().nullable();
+
+// Types
+export type CreateTodoArgs = z.infer<typeof CreateTodoArgsSchema>;
+export type CreateTodoReturns = z.infer<typeof CreateTodoReturnsSchema>;
+
+// Hook (useMutation for create_* functions)
+export function useCreateTodo() {
+  return useMutation({
+    mutationFn: async (args: CreateTodoArgs) => {
+      const validated = CreateTodoArgsSchema.parse(args);
+      const { data, error } = await supabase.rpc('create_todo', validated);
+      if (error) throw error;
+      return CreateTodoReturnsSchema.parse(data);
+    },
+  });
+}
+```
+
+#### Usage
+
+```tsx
+// Query hook - pass args directly
+const { data: todos } = useGetUserTodos({ user_id: 'user-123' });
+
+// Mutation hook - call mutate/mutateAsync with args
+const createTodo = useCreateTodo();
+const handleCreate = async () => {
+  const newId = await createTodo.mutateAsync({
+    name: 'New Todo',
+    description: 'Description',
+  });
+};
 ```
 
 ### Database Enums

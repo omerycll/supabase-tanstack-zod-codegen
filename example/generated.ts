@@ -105,15 +105,6 @@ function applyFilters<T>(query: T, filters?: FilterCondition[]): T {
   return result as T;
 }
 
-export const TodoStatusSchema = z.enum([
-  'pending',
-  'in_progress',
-  'completed',
-  'cancelled',
-]);
-
-export const PriorityLevelSchema = z.enum(['low', 'medium', 'high', 'urgent']);
-
 export const TodoItemSchema = z.object({
   created_at: z.string(),
   description: z.string(),
@@ -167,34 +158,24 @@ export const GetUserProfileReturnsSchema = z
   })
   .nullable();
 
-export const GetUserTodosArgsSchema = z.object({
+export const CreateUserProfileArgsSchema = z.object({
   user_id: z.string(),
+  first_name: z.string(),
+  last_name: z.string(),
 });
 
-export const GetUserTodosReturnsSchema = z
-  .array(
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      description: z.string(),
-      created_at: z.string(),
-    })
-  )
+export const CreateUserProfileReturnsSchema = z
+  .object({ id: z.string() })
   .nullable();
 
-export const SearchTodosArgsSchema = z.object({
-  search_term: z.string(),
-  limit_count: z.number().optional(),
-});
+export const EnumsArgsSchema = z.object({});
 
-export const SearchTodosReturnsSchema = z
-  .array(
-    z.object({ id: z.string(), name: z.string(), description: z.string() })
-  )
-  .nullable();
+export const EnumsReturnsSchema = z.unknown().nullable();
 
-export type TodoStatus = z.infer<typeof TodoStatusSchema>;
-export type PriorityLevel = z.infer<typeof PriorityLevelSchema>;
+export const CompositeTypesArgsSchema = z.object({});
+
+export const CompositeTypesReturnsSchema = z.unknown().nullable();
+
 export type TodoItem = z.infer<typeof TodoItemSchema>;
 export type AddTodoItemRequest = z.infer<typeof AddTodoItemRequestSchema>;
 export type UpdateTodoItemRequest = z.infer<typeof UpdateTodoItemRequestSchema>;
@@ -203,10 +184,14 @@ export type AddProfileRequest = z.infer<typeof AddProfileRequestSchema>;
 export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequestSchema>;
 export type GetUserProfileArgs = z.infer<typeof GetUserProfileArgsSchema>;
 export type GetUserProfileReturns = z.infer<typeof GetUserProfileReturnsSchema>;
-export type GetUserTodosArgs = z.infer<typeof GetUserTodosArgsSchema>;
-export type GetUserTodosReturns = z.infer<typeof GetUserTodosReturnsSchema>;
-export type SearchTodosArgs = z.infer<typeof SearchTodosArgsSchema>;
-export type SearchTodosReturns = z.infer<typeof SearchTodosReturnsSchema>;
+export type CreateUserProfileArgs = z.infer<typeof CreateUserProfileArgsSchema>;
+export type CreateUserProfileReturns = z.infer<
+  typeof CreateUserProfileReturnsSchema
+>;
+export type EnumsArgs = z.infer<typeof EnumsArgsSchema>;
+export type EnumsReturns = z.infer<typeof EnumsReturnsSchema>;
+export type CompositeTypesArgs = z.infer<typeof CompositeTypesArgsSchema>;
+export type CompositeTypesReturns = z.infer<typeof CompositeTypesReturnsSchema>;
 
 export function useGetTodoItem(id: string) {
   return useQuery<TodoItem, Error>({
@@ -566,32 +551,43 @@ export function useGetUserProfile(args: GetUserProfileArgs) {
   });
 }
 
-export function useGetUserTodos(args: GetUserTodosArgs) {
-  return useQuery({
-    queryKey: ['get_user_todos', args],
-    queryFn: async () => {
-      const validated = GetUserTodosArgsSchema.parse(args);
+export function useCreateUserProfile() {
+  return useMutation({
+    mutationFn: async (args: CreateUserProfileArgs) => {
+      const validated = CreateUserProfileArgsSchema.parse(args);
       const { data, error } = await supabase.rpc(
-        'get_user_todos',
+        'create_user_profile',
         validated as never
       );
       if (error) throw error;
-      return GetUserTodosReturnsSchema.parse(data);
+      return CreateUserProfileReturnsSchema.parse(data);
     },
   });
 }
 
-export function useSearchTodos(args: SearchTodosArgs) {
+export function useEnums(args: EnumsArgs) {
   return useQuery({
-    queryKey: ['search_todos', args],
+    queryKey: ['Enums', args],
     queryFn: async () => {
-      const validated = SearchTodosArgsSchema.parse(args);
+      const validated = EnumsArgsSchema.parse(args);
+      const { data, error } = await supabase.rpc('Enums', validated as never);
+      if (error) throw error;
+      return EnumsReturnsSchema.parse(data);
+    },
+  });
+}
+
+export function useCompositeTypes(args: CompositeTypesArgs) {
+  return useQuery({
+    queryKey: ['CompositeTypes', args],
+    queryFn: async () => {
+      const validated = CompositeTypesArgsSchema.parse(args);
       const { data, error } = await supabase.rpc(
-        'search_todos',
+        'CompositeTypes',
         validated as never
       );
       if (error) throw error;
-      return SearchTodosReturnsSchema.parse(data);
+      return CompositeTypesReturnsSchema.parse(data);
     },
   });
 }
