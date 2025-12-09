@@ -117,7 +117,7 @@ export interface PaginatedResponse<T> {
 
   // Create the output file content with imports and hooks
   const generatedFileContent = `
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, UseMutationOptions, UseQueryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 ${importSupabase({ relativeSupabasePath, supabaseExportName })}
 

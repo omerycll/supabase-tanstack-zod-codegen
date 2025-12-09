@@ -14,6 +14,7 @@ A CLI tool to automatically generate TanStack Query (React Query v5) hooks, Zod 
 - **Database Functions (RPC)** support with auto-generated hooks
 - **Database Enums** support with Zod schemas
 - **Optimized queries** - Single query for count + data (no extra requests)
+- **Query Invalidation** - Mutation hooks support `queryInvalidate` option for automatic cache invalidation
 - Works with both `interface Database` and `type Database` (new Supabase format)
 
 ## Installation
@@ -146,7 +147,7 @@ Database functions automatically generate either `useQuery` or `useMutation` hoo
 | `mutation_*` | `useMutation` | `mutation_reset_data` → `useMutationResetData()` |
 | Other | `useQuery` | `calculate_total` → `useCalculateTotal(args)` |
 
-> **Note:** All function return schemas include `.nullable()` since Supabase RPC calls can return `null`.
+> **Note:** All function return schemas include `.nullable()` since Supabase RPC calls can return `null`. This applies to both the outer schema and all fields within the return object/array.
 
 #### Query Function Example
 
@@ -167,10 +168,10 @@ export const GetUserTodosArgsSchema = z.object({
 
 export const GetUserTodosReturnsSchema = z.array(
   z.object({
-    id: z.string(),
-    name: z.string(),
-    description: z.string(),
-    created_at: z.string(),
+    id: z.string().nullable(),
+    name: z.string().nullable(),
+    description: z.string().nullable(),
+    created_at: z.string().nullable(),
   })
 ).nullable();
 
@@ -210,20 +211,33 @@ export const CreateTodoArgsSchema = z.object({
   description: z.string(),
 });
 
-export const CreateTodoReturnsSchema = z.string().nullable();
+export const CreateTodoReturnsSchema = z.object({
+  id: z.string().nullable(),
+}).nullable();
 
 // Types
 export type CreateTodoArgs = z.infer<typeof CreateTodoArgsSchema>;
 export type CreateTodoReturns = z.infer<typeof CreateTodoReturnsSchema>;
 
 // Hook (useMutation for create_* functions)
-export function useCreateTodo() {
+export function useCreateTodo(options?: CreateTodoMutationOptions) {
+  const queryClient = useQueryClient();
+  const { queryInvalidate, onSuccess, ...mutationOptions } = options ?? {};
   return useMutation({
     mutationFn: async (args: CreateTodoArgs) => {
       const validated = CreateTodoArgsSchema.parse(args);
       const { data, error } = await supabase.rpc('create_todo', validated);
       if (error) throw error;
       return CreateTodoReturnsSchema.parse(data);
+    },
+    ...mutationOptions,
+    onSuccess: (...args) => {
+      if (queryInvalidate) {
+        queryInvalidate.forEach((queryKey) => {
+          queryClient.invalidateQueries({ queryKey });
+        });
+      }
+      onSuccess?.(...args);
     },
   });
 }
@@ -235,6 +249,16 @@ export function useCreateTodo() {
 // Query hook - pass args directly
 const { data: todos } = useGetUserTodos({ user_id: 'user-123' });
 
+// Query hook with options
+const { data: todos } = useGetUserTodos(
+  { user_id: 'user-123' },
+  {
+    enabled: isLoggedIn,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+  }
+);
+
 // Mutation hook - call mutate/mutateAsync with args
 const createTodo = useCreateTodo();
 const handleCreate = async () => {
@@ -243,6 +267,17 @@ const handleCreate = async () => {
     description: 'Description',
   });
 };
+
+// Mutation hook with automatic query invalidation
+const createTodo = useCreateTodo({
+  queryInvalidate: [
+    ['get_user_todos'],           // Invalidate user todos query
+    ['todo_items'],               // Invalidate todo items list
+  ],
+  onSuccess: (data) => {
+    console.log('Todo created:', data);
+  },
+});
 ```
 
 ### Database Enums

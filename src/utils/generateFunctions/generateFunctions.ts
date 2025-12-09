@@ -39,10 +39,18 @@ function isJsonType(type: Type): boolean {
   return false;
 }
 
-function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
+function typeToZodSchema(
+  type: Type,
+  isOptional = false,
+  depth = 0,
+  forceNullable = false
+): string {
   // Prevent infinite recursion - use a low depth since Json type recurses quickly
   if (depth > 2) {
-    return isOptional ? 'z.unknown().optional()' : 'z.unknown()';
+    let schema = 'z.unknown()';
+    if (forceNullable) schema += '.nullable()';
+    if (isOptional) schema += '.optional()';
+    return schema;
   }
 
   // Handle null types
@@ -120,27 +128,43 @@ function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
 
   // Handle primitive types using type checking methods (not getText)
   if (type.isString() || type.isStringLiteral()) {
-    return isOptional ? 'z.string().optional()' : 'z.string()';
+    let schema = 'z.string()';
+    if (forceNullable) schema += '.nullable()';
+    if (isOptional) schema += '.optional()';
+    return schema;
   }
   if (type.isNumber() || type.isNumberLiteral()) {
-    return isOptional ? 'z.number().optional()' : 'z.number()';
+    let schema = 'z.number()';
+    if (forceNullable) schema += '.nullable()';
+    if (isOptional) schema += '.optional()';
+    return schema;
   }
   if (type.isBoolean() || type.isBooleanLiteral()) {
-    return isOptional ? 'z.boolean().optional()' : 'z.boolean()';
+    let schema = 'z.boolean()';
+    if (forceNullable) schema += '.nullable()';
+    if (isOptional) schema += '.optional()';
+    return schema;
   }
 
   // Handle array types
   if (type.isArray()) {
     const elementType = type.getArrayElementType();
     if (elementType) {
-      const elementSchema = typeToZodSchema(elementType, false, depth + 1);
-      return isOptional
-        ? `z.array(${elementSchema}).optional()`
-        : `z.array(${elementSchema})`;
+      const elementSchema = typeToZodSchema(
+        elementType,
+        false,
+        depth + 1,
+        forceNullable
+      );
+      let schema = `z.array(${elementSchema})`;
+      if (forceNullable) schema += '.nullable()';
+      if (isOptional) schema += '.optional()';
+      return schema;
     }
-    return isOptional
-      ? 'z.array(z.unknown()).optional()'
-      : 'z.array(z.unknown())';
+    let schema = 'z.array(z.unknown())';
+    if (forceNullable) schema += '.nullable()';
+    if (isOptional) schema += '.optional()';
+    return schema;
   }
 
   // Handle object types
@@ -154,7 +178,12 @@ function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
           prop.getValueDeclarationOrThrow()
         );
         const propIsOptional = prop.isOptional();
-        const zodType = typeToZodSchema(propType, propIsOptional, depth + 1);
+        const zodType = typeToZodSchema(
+          propType,
+          propIsOptional,
+          depth + 1,
+          forceNullable
+        );
         fields.push(`${propName}: ${zodType}`);
       }
       const objectSchema = `z.object({ ${fields.join(', ')} })`;
@@ -163,7 +192,10 @@ function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
   }
 
   // Default fallback
-  return isOptional ? 'z.unknown().optional()' : 'z.unknown()';
+  let schema = 'z.unknown()';
+  if (forceNullable) schema += '.nullable()';
+  if (isOptional) schema += '.optional()';
+  return schema;
 }
 
 export function generateFunctionSchemas({
@@ -218,7 +250,8 @@ export function generateFunctionSchemas({
       .getTypeChecker()
       .getTypeAtLocation(returnsProperty.getValueDeclarationOrThrow());
 
-    const zodSchema = typeToZodSchema(returnsType, false);
+    // forceNullable = true because function return fields can be null
+    const zodSchema = typeToZodSchema(returnsType, false, 0, true);
     schemas.push(
       `export const ${returnsSchemaName} = ${zodSchema}.nullable();`
     );
@@ -278,8 +311,18 @@ export function generateFunctionHooks({
   const hooks: string[] = [];
 
   if (isMutationFunction(functionName)) {
+    const returnsTypeName = `${pascalName}Returns`;
+    const optionsTypeName = `${pascalName}MutationOptions`;
     // Generate useMutation hook for create/update/delete functions
-    hooks.push(`export function ${hookName}() {
+    hooks.push(`interface ${optionsTypeName} extends Omit<UseMutationOptions<${returnsTypeName}, Error, ${argsTypeName}, unknown>, 'mutationFn'> {
+  queryInvalidate?: string[][];
+}
+
+export function ${hookName}(
+  options?: ${optionsTypeName},
+) {
+  const queryClient = useQueryClient();
+  const { queryInvalidate, onSuccess, ...mutationOptions } = options ?? {};
   return useMutation({
     mutationFn: async (args: ${argsTypeName}) => {
       const validated = ${argsSchemaName}.parse(args);
@@ -287,11 +330,24 @@ export function generateFunctionHooks({
       if (error) throw error;
       return ${returnsSchemaName}.parse(data);
     },
+    ...mutationOptions,
+    onSuccess: (...args) => {
+      if (queryInvalidate) {
+        queryInvalidate.forEach((queryKey) => {
+          queryClient.invalidateQueries({ queryKey });
+        });
+      }
+      onSuccess?.(...args);
+    },
   });
 }`);
   } else {
+    const returnsTypeName = `${pascalName}Returns`;
+    const optionsTypeName = `${pascalName}QueryOptions`;
     // Generate useQuery hook for get/search and other functions
-    hooks.push(`export function ${hookName}(args: ${argsTypeName}) {
+    hooks.push(`type ${optionsTypeName} = Omit<UseQueryOptions<${returnsTypeName}, Error>, 'queryKey' | 'queryFn'>;
+
+export function ${hookName}(args: ${argsTypeName}, options?: ${optionsTypeName}) {
   return useQuery({
     queryKey: ['${functionName}', args],
     queryFn: async () => {
@@ -300,6 +356,7 @@ export function generateFunctionHooks({
       if (error) throw error;
       return ${returnsSchemaName}.parse(data);
     },
+    ...options,
   });
 }`);
   }
