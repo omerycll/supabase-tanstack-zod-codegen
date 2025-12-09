@@ -14,7 +14,9 @@ function isJsonType(type: Type): boolean {
   if (!type.isUnion()) return false;
 
   const unionTypes = type.getUnionTypes();
-  const nonNullTypes = unionTypes.filter((t) => !t.isNull() && !t.isUndefined());
+  const nonNullTypes = unionTypes.filter(
+    (t) => !t.isNull() && !t.isUndefined()
+  );
 
   // Json type typically has: string, number, boolean, object (with index signature), array
   const hasString = nonNullTypes.some((t) => t.isString());
@@ -55,7 +57,9 @@ function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
 
   // Detect Json type early and return z.unknown() to avoid infinite recursion
   if (isJsonType(type)) {
-    return isOptional ? 'z.unknown().nullable().optional()' : 'z.unknown().nullable()';
+    return isOptional
+      ? 'z.unknown().nullable().optional()'
+      : 'z.unknown().nullable()';
   }
 
   // Handle union types (e.g., string | null, number | undefined)
@@ -63,11 +67,16 @@ function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
     const unionTypes = type.getUnionTypes();
     const hasNull = unionTypes.some((t) => t.isNull());
     const hasUndefined = unionTypes.some((t) => t.isUndefined());
-    const nonNullUndefinedTypes = unionTypes.filter((t) => !t.isNull() && !t.isUndefined());
+    const nonNullUndefinedTypes = unionTypes.filter(
+      (t) => !t.isNull() && !t.isUndefined()
+    );
 
     // Check if any of the non-null types is a Json-like type
     // If the inner type is also a complex union, treat it as Json
-    if (nonNullUndefinedTypes.length === 1 && isJsonType(nonNullUndefinedTypes[0])) {
+    if (
+      nonNullUndefinedTypes.length === 1 &&
+      isJsonType(nonNullUndefinedTypes[0])
+    ) {
       let schema = 'z.unknown()';
       if (hasNull) schema += '.nullable()';
       if (hasUndefined || isOptional) schema += '.optional()';
@@ -75,8 +84,13 @@ function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
     }
 
     // Check if it's a string literal union (enum-like)
-    const stringLiterals = nonNullUndefinedTypes.filter((t) => t.isStringLiteral());
-    if (stringLiterals.length > 0 && stringLiterals.length === nonNullUndefinedTypes.length) {
+    const stringLiterals = nonNullUndefinedTypes.filter((t) =>
+      t.isStringLiteral()
+    );
+    if (
+      stringLiterals.length > 0 &&
+      stringLiterals.length === nonNullUndefinedTypes.length
+    ) {
       const values = stringLiterals.map((t) => t.getLiteralValue() as string);
       let schema = `z.enum([${values.map((v) => `'${v}'`).join(', ')}])`;
       if (hasNull) schema += '.nullable()';
@@ -85,7 +99,11 @@ function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
     }
 
     if (nonNullUndefinedTypes.length === 1) {
-      let baseSchema = typeToZodSchema(nonNullUndefinedTypes[0], false, depth + 1);
+      let baseSchema = typeToZodSchema(
+        nonNullUndefinedTypes[0],
+        false,
+        depth + 1
+      );
       if (hasNull) baseSchema = `${baseSchema}.nullable()`;
       if (hasUndefined || isOptional) baseSchema = `${baseSchema}.optional()`;
       return baseSchema;
@@ -116,9 +134,13 @@ function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
     const elementType = type.getArrayElementType();
     if (elementType) {
       const elementSchema = typeToZodSchema(elementType, false, depth + 1);
-      return isOptional ? `z.array(${elementSchema}).optional()` : `z.array(${elementSchema})`;
+      return isOptional
+        ? `z.array(${elementSchema}).optional()`
+        : `z.array(${elementSchema})`;
     }
-    return isOptional ? 'z.array(z.unknown()).optional()' : 'z.array(z.unknown())';
+    return isOptional
+      ? 'z.array(z.unknown()).optional()'
+      : 'z.array(z.unknown())';
   }
 
   // Handle object types
@@ -128,7 +150,9 @@ function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
       const fields: string[] = [];
       for (const prop of properties) {
         const propName = prop.getName();
-        const propType = prop.getTypeAtLocation(prop.getValueDeclarationOrThrow());
+        const propType = prop.getTypeAtLocation(
+          prop.getValueDeclarationOrThrow()
+        );
         const propIsOptional = prop.isOptional();
         const zodType = typeToZodSchema(propType, propIsOptional, depth + 1);
         fields.push(`${propName}: ${zodType}`);
@@ -142,7 +166,11 @@ function typeToZodSchema(type: Type, isOptional = false, depth = 0): string {
   return isOptional ? 'z.unknown().optional()' : 'z.unknown()';
 }
 
-export function generateFunctionSchemas({ func, functionName, project }: GenerateFunctionsArg): string[] {
+export function generateFunctionSchemas({
+  func,
+  functionName,
+  project,
+}: GenerateFunctionsArg): string[] {
   const schemas: string[] = [];
   const pascalName = toPascalCase(functionName);
   const argsSchemaName = `${pascalName}ArgsSchema`;
@@ -165,12 +193,18 @@ export function generateFunctionSchemas({ func, functionName, project }: Generat
     const schemaFields: string[] = [];
     for (const prop of properties) {
       const propName = prop.getName();
-      const propType = prop.getTypeAtLocation(prop.getValueDeclarationOrThrow());
+      const propType = prop.getTypeAtLocation(
+        prop.getValueDeclarationOrThrow()
+      );
       const isOptional = prop.isOptional();
       const zodType = typeToZodSchema(propType, isOptional);
       schemaFields.push(`  ${propName}: ${zodType}`);
     }
-    schemas.push(`export const ${argsSchemaName} = z.object({\n${schemaFields.join(',\n')}\n});`);
+    schemas.push(
+      `export const ${argsSchemaName} = z.object({\n${schemaFields.join(
+        ',\n'
+      )}\n});`
+    );
   } else {
     schemas.push(`export const ${argsSchemaName} = z.object({});`);
   }
@@ -185,7 +219,9 @@ export function generateFunctionSchemas({ func, functionName, project }: Generat
       .getTypeAtLocation(returnsProperty.getValueDeclarationOrThrow());
 
     const zodSchema = typeToZodSchema(returnsType, false);
-    schemas.push(`export const ${returnsSchemaName} = ${zodSchema}.nullable();`);
+    schemas.push(
+      `export const ${returnsSchemaName} = ${zodSchema}.nullable();`
+    );
   } else {
     schemas.push(`export const ${returnsSchemaName} = z.unknown().nullable();`);
   }
@@ -193,7 +229,11 @@ export function generateFunctionSchemas({ func, functionName, project }: Generat
   return schemas;
 }
 
-export function generateFunctionTypes({ functionName }: { functionName: string }): string[] {
+export function generateFunctionTypes({
+  functionName,
+}: {
+  functionName: string;
+}): string[] {
   const pascalName = toPascalCase(functionName);
   const argsTypeName = `${pascalName}Args`;
   const returnsTypeName = `${pascalName}Returns`;
@@ -207,12 +247,27 @@ export function generateFunctionTypes({ functionName }: { functionName: string }
 }
 
 function isMutationFunction(functionName: string): boolean {
-  const mutationPrefixes = ['create', 'update', 'delete'];
+  const mutationPrefixes = [
+    'add',
+    'create',
+    'update',
+    'delete',
+    'bulk_add',
+    'bulk_update',
+    'bulk_delete',
+    'mutation',
+  ];
   const lowerName = functionName.toLowerCase();
   return mutationPrefixes.some((prefix) => lowerName.startsWith(prefix));
 }
 
-export function generateFunctionHooks({ functionName, supabaseExportName }: { functionName: string; supabaseExportName?: string }): string[] {
+export function generateFunctionHooks({
+  functionName,
+  supabaseExportName,
+}: {
+  functionName: string;
+  supabaseExportName?: string;
+}): string[] {
   const supabase = supabaseExportName || 'supabase';
   const pascalName = toPascalCase(functionName);
   const hookName = `use${pascalName}`;

@@ -136,9 +136,14 @@ Database functions automatically generate either `useQuery` or `useMutation` hoo
 |--------|-----------|---------|
 | `get_*` | `useQuery` | `get_user_todos` → `useGetUserTodos(args)` |
 | `search_*` | `useQuery` | `search_todos` → `useSearchTodos(args)` |
+| `add_*` | `useMutation` | `add_todo` → `useAddTodo()` |
 | `create_*` | `useMutation` | `create_todo` → `useCreateTodo()` |
 | `update_*` | `useMutation` | `update_todo` → `useUpdateTodo()` |
 | `delete_*` | `useMutation` | `delete_todo` → `useDeleteTodo()` |
+| `bulk_add_*` | `useMutation` | `bulk_add_todos` → `useBulkAddTodos()` |
+| `bulk_update_*` | `useMutation` | `bulk_update_todos` → `useBulkUpdateTodos()` |
+| `bulk_delete_*` | `useMutation` | `bulk_delete_todos` → `useBulkDeleteTodos()` |
+| `mutation_*` | `useMutation` | `mutation_reset_data` → `useMutationResetData()` |
 | Other | `useQuery` | `calculate_total` → `useCalculateTotal(args)` |
 
 > **Note:** All function return schemas include `.nullable()` since Supabase RPC calls can return `null`.
