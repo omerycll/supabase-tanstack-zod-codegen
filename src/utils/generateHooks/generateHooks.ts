@@ -120,7 +120,8 @@ export function generateHooks({
           totalPages: Math.ceil(total / pageSize),
         },
       };
-    }
+    },
+    enabled: options?.enabled ?? true,
   });
 }`,
     `export function ${toHookName({ operation: 'Add', tableName })}() {

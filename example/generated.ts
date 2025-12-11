@@ -51,6 +51,7 @@ export type Pagination = z.infer<typeof PaginationSchema>;
 
 // Query options combining filters, sorting, pagination, and select
 export const QueryOptionsSchema = z.object({
+  enabled: z.boolean().optional(),
   filters: z.array(FilterConditionSchema).optional(),
   sort: SortOptionSchema.optional(),
   pagination: PaginationSchema.optional(),
@@ -287,6 +288,7 @@ export function useGetAllTodoItems(options?: QueryOptions) {
         },
       };
     },
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -460,6 +462,7 @@ export function useGetAllProfiles(options?: QueryOptions) {
         },
       };
     },
+    enabled: options?.enabled ?? true,
   });
 }
 
