@@ -310,6 +310,21 @@ console.log(data?.data);       // TodoItem[]
 console.log(data?.pagination); // { page, pageSize, total, totalPages }
 ```
 
+### Enabled
+
+```tsx
+// Conditionally enable/disable the query
+const { data } = useGetAllTodoItems({
+  enabled: !!userId,  // Only fetch when userId exists
+  filters: [{ column: 'user_id', operator: 'eq', value: userId }],
+});
+
+// Disable query entirely
+const { data } = useGetAllTodoItems({
+  enabled: false,
+});
+```
+
 ### Pagination
 
 ```tsx
@@ -572,6 +587,7 @@ interface Pagination {
 
 // Query options for useGetAll hooks
 interface QueryOptions {
+  enabled?: boolean;  // default: true
   filters?: FilterCondition[];
   sort?: SortOption;
   pagination?: Pagination;
