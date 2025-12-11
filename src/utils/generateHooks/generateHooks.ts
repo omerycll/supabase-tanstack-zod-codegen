@@ -128,10 +128,13 @@ export function generateHooks({
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (item: ${addRowType}) => {
-      const validated = ${addSchema}.parse(item);
+      const result = ${addSchema}.safeParse(item);
+      if (!result.success) {
+        throw new Error(\`Validation failed: \${result.error.issues.map(i => \`\${i.path.join('.')}: \${i.message}\`).join(', ')}\`);
+      }
       const { data, error } = await ${supabase}
         .from('${tableName}')
-        .insert(validated as never)
+        .insert(result.data as never)
         .select()
         .single();
       if (error) throw error;
@@ -146,7 +149,11 @@ export function generateHooks({
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (item: ${updateRowType}) => {
-      const { id, ...updates } = ${updateSchema}.parse(item);
+      const result = ${updateSchema}.safeParse(item);
+      if (!result.success) {
+        throw new Error(\`Validation failed: \${result.error.issues.map(i => \`\${i.path.join('.')}: \${i.message}\`).join(', ')}\`);
+      }
+      const { id, ...updates } = result.data;
       const { data, error } = await ${supabase}
         .from('${tableName}')
         .update(updates as never)
@@ -182,7 +189,14 @@ export function generateHooks({
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (items: ${addRowType}[]) => {
-      const validated = items.map(item => ${addSchema}.parse(item));
+      const validated: ${addRowType}[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const result = ${addSchema}.safeParse(items[i]);
+        if (!result.success) {
+          throw new Error(\`Validation failed at index \${i}: \${result.error.issues.map(issue => \`\${issue.path.join('.')}: \${issue.message}\`).join(', ')}\`);
+        }
+        validated.push(result.data);
+      }
       const { data, error } = await ${supabase}
         .from('${tableName}')
         .insert(validated as never)
@@ -201,8 +215,12 @@ export function generateHooks({
   return useMutation({
     mutationFn: async (items: ${updateRowType}[]) => {
       const results: ${getRowType}[] = [];
-      for (const item of items) {
-        const { id, ...updates } = ${updateSchema}.parse(item);
+      for (let i = 0; i < items.length; i++) {
+        const result = ${updateSchema}.safeParse(items[i]);
+        if (!result.success) {
+          throw new Error(\`Validation failed at index \${i}: \${result.error.issues.map(issue => \`\${issue.path.join('.')}: \${issue.message}\`).join(', ')}\`);
+        }
+        const { id, ...updates } = result.data;
         const { data, error } = await ${supabase}
           .from('${tableName}')
           .update(updates as never)

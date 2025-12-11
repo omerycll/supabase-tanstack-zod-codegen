@@ -325,10 +325,17 @@ export function ${hookName}(
   const { queryInvalidate, onSuccess, ...mutationOptions } = options ?? {};
   return useMutation({
     mutationFn: async (args: ${argsTypeName}) => {
-      const validated = ${argsSchemaName}.parse(args);
-      const { data, error } = await ${supabase}.rpc('${functionName}', validated as never);
+      const argsResult = ${argsSchemaName}.safeParse(args);
+      if (!argsResult.success) {
+        throw new Error(\`Validation failed: \${argsResult.error.issues.map(i => \`\${i.path.join('.')}: \${i.message}\`).join(', ')}\`);
+      }
+      const { data, error } = await ${supabase}.rpc('${functionName}', argsResult.data as never);
       if (error) throw error;
-      return ${returnsSchemaName}.parse(data);
+      const returnsResult = ${returnsSchemaName}.safeParse(data);
+      if (!returnsResult.success) {
+        throw new Error(\`Response validation failed: \${returnsResult.error.issues.map(i => \`\${i.path.join('.')}: \${i.message}\`).join(', ')}\`);
+      }
+      return returnsResult.data;
     },
     ...mutationOptions,
     onSuccess: (...args) => {
@@ -351,10 +358,17 @@ export function ${hookName}(args: ${argsTypeName}, options?: ${optionsTypeName})
   return useQuery({
     queryKey: ['${functionName}', args],
     queryFn: async () => {
-      const validated = ${argsSchemaName}.parse(args);
-      const { data, error } = await ${supabase}.rpc('${functionName}', validated as never);
+      const argsResult = ${argsSchemaName}.safeParse(args);
+      if (!argsResult.success) {
+        throw new Error(\`Validation failed: \${argsResult.error.issues.map(i => \`\${i.path.join('.')}: \${i.message}\`).join(', ')}\`);
+      }
+      const { data, error } = await ${supabase}.rpc('${functionName}', argsResult.data as never);
       if (error) throw error;
-      return ${returnsSchemaName}.parse(data);
+      const returnsResult = ${returnsSchemaName}.safeParse(data);
+      if (!returnsResult.success) {
+        throw new Error(\`Response validation failed: \${returnsResult.error.issues.map(i => \`\${i.path.join('.')}: \${i.message}\`).join(', ')}\`);
+      }
+      return returnsResult.data;
     },
     ...options,
   });

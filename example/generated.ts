@@ -296,10 +296,17 @@ export function useAddTodoItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (item: AddTodoItemRequest) => {
-      const validated = AddTodoItemRequestSchema.parse(item);
+      const result = AddTodoItemRequestSchema.safeParse(item);
+      if (!result.success) {
+        throw new Error(
+          `Validation failed: ${result.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(', ')}`
+        );
+      }
       const { data, error } = await supabase
         .from('todo_items')
-        .insert(validated as never)
+        .insert(result.data as never)
         .select()
         .single();
       if (error) throw error;
@@ -315,7 +322,15 @@ export function useUpdateTodoItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (item: UpdateTodoItemRequest) => {
-      const { id, ...updates } = UpdateTodoItemRequestSchema.parse(item);
+      const result = UpdateTodoItemRequestSchema.safeParse(item);
+      if (!result.success) {
+        throw new Error(
+          `Validation failed: ${result.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(', ')}`
+        );
+      }
+      const { id, ...updates } = result.data;
       const { data, error } = await supabase
         .from('todo_items')
         .update(updates as never)
@@ -349,9 +364,18 @@ export function useBulkAddTodoItems() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (items: AddTodoItemRequest[]) => {
-      const validated = items.map((item) =>
-        AddTodoItemRequestSchema.parse(item)
-      );
+      const validated: AddTodoItemRequest[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const result = AddTodoItemRequestSchema.safeParse(items[i]);
+        if (!result.success) {
+          throw new Error(
+            `Validation failed at index ${i}: ${result.error.issues
+              .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+              .join(', ')}`
+          );
+        }
+        validated.push(result.data);
+      }
       const { data, error } = await supabase
         .from('todo_items')
         .insert(validated as never)
@@ -370,8 +394,16 @@ export function useBulkUpdateTodoItems() {
   return useMutation({
     mutationFn: async (items: UpdateTodoItemRequest[]) => {
       const results: TodoItem[] = [];
-      for (const item of items) {
-        const { id, ...updates } = UpdateTodoItemRequestSchema.parse(item);
+      for (let i = 0; i < items.length; i++) {
+        const result = UpdateTodoItemRequestSchema.safeParse(items[i]);
+        if (!result.success) {
+          throw new Error(
+            `Validation failed at index ${i}: ${result.error.issues
+              .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+              .join(', ')}`
+          );
+        }
+        const { id, ...updates } = result.data;
         const { data, error } = await supabase
           .from('todo_items')
           .update(updates as never)
@@ -470,10 +502,17 @@ export function useAddProfile() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (item: AddProfileRequest) => {
-      const validated = AddProfileRequestSchema.parse(item);
+      const result = AddProfileRequestSchema.safeParse(item);
+      if (!result.success) {
+        throw new Error(
+          `Validation failed: ${result.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(', ')}`
+        );
+      }
       const { data, error } = await supabase
         .from('profiles')
-        .insert(validated as never)
+        .insert(result.data as never)
         .select()
         .single();
       if (error) throw error;
@@ -489,7 +528,15 @@ export function useUpdateProfile() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (item: UpdateProfileRequest) => {
-      const { id, ...updates } = UpdateProfileRequestSchema.parse(item);
+      const result = UpdateProfileRequestSchema.safeParse(item);
+      if (!result.success) {
+        throw new Error(
+          `Validation failed: ${result.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(', ')}`
+        );
+      }
+      const { id, ...updates } = result.data;
       const { data, error } = await supabase
         .from('profiles')
         .update(updates as never)
@@ -523,9 +570,18 @@ export function useBulkAddProfiles() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (items: AddProfileRequest[]) => {
-      const validated = items.map((item) =>
-        AddProfileRequestSchema.parse(item)
-      );
+      const validated: AddProfileRequest[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const result = AddProfileRequestSchema.safeParse(items[i]);
+        if (!result.success) {
+          throw new Error(
+            `Validation failed at index ${i}: ${result.error.issues
+              .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+              .join(', ')}`
+          );
+        }
+        validated.push(result.data);
+      }
       const { data, error } = await supabase
         .from('profiles')
         .insert(validated as never)
@@ -544,8 +600,16 @@ export function useBulkUpdateProfiles() {
   return useMutation({
     mutationFn: async (items: UpdateProfileRequest[]) => {
       const results: Profile[] = [];
-      for (const item of items) {
-        const { id, ...updates } = UpdateProfileRequestSchema.parse(item);
+      for (let i = 0; i < items.length; i++) {
+        const result = UpdateProfileRequestSchema.safeParse(items[i]);
+        if (!result.success) {
+          throw new Error(
+            `Validation failed at index ${i}: ${result.error.issues
+              .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+              .join(', ')}`
+          );
+        }
+        const { id, ...updates } = result.data;
         const { data, error } = await supabase
           .from('profiles')
           .update(updates as never)
@@ -589,13 +653,28 @@ export function useGetUserProfile(
   return useQuery({
     queryKey: ['get_user_profile', args],
     queryFn: async () => {
-      const validated = GetUserProfileArgsSchema.parse(args);
+      const argsResult = GetUserProfileArgsSchema.safeParse(args);
+      if (!argsResult.success) {
+        throw new Error(
+          `Validation failed: ${argsResult.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(', ')}`
+        );
+      }
       const { data, error } = await supabase.rpc(
         'get_user_profile',
-        validated as never
+        argsResult.data as never
       );
       if (error) throw error;
-      return GetUserProfileReturnsSchema.parse(data);
+      const returnsResult = GetUserProfileReturnsSchema.safeParse(data);
+      if (!returnsResult.success) {
+        throw new Error(
+          `Response validation failed: ${returnsResult.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(', ')}`
+        );
+      }
+      return returnsResult.data;
     },
     ...options,
   });
@@ -614,13 +693,28 @@ export function useCreateTodo(options?: CreateTodoMutationOptions) {
   const { queryInvalidate, onSuccess, ...mutationOptions } = options ?? {};
   return useMutation({
     mutationFn: async (args: CreateTodoArgs) => {
-      const validated = CreateTodoArgsSchema.parse(args);
+      const argsResult = CreateTodoArgsSchema.safeParse(args);
+      if (!argsResult.success) {
+        throw new Error(
+          `Validation failed: ${argsResult.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(', ')}`
+        );
+      }
       const { data, error } = await supabase.rpc(
         'create_todo',
-        validated as never
+        argsResult.data as never
       );
       if (error) throw error;
-      return CreateTodoReturnsSchema.parse(data);
+      const returnsResult = CreateTodoReturnsSchema.safeParse(data);
+      if (!returnsResult.success) {
+        throw new Error(
+          `Response validation failed: ${returnsResult.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(', ')}`
+        );
+      }
+      return returnsResult.data;
     },
     ...mutationOptions,
     onSuccess: (...args) => {
@@ -646,13 +740,28 @@ export function useGetUserTodos(
   return useQuery({
     queryKey: ['get_user_todos', args],
     queryFn: async () => {
-      const validated = GetUserTodosArgsSchema.parse(args);
+      const argsResult = GetUserTodosArgsSchema.safeParse(args);
+      if (!argsResult.success) {
+        throw new Error(
+          `Validation failed: ${argsResult.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(', ')}`
+        );
+      }
       const { data, error } = await supabase.rpc(
         'get_user_todos',
-        validated as never
+        argsResult.data as never
       );
       if (error) throw error;
-      return GetUserTodosReturnsSchema.parse(data);
+      const returnsResult = GetUserTodosReturnsSchema.safeParse(data);
+      if (!returnsResult.success) {
+        throw new Error(
+          `Response validation failed: ${returnsResult.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(', ')}`
+        );
+      }
+      return returnsResult.data;
     },
     ...options,
   });
@@ -670,13 +779,28 @@ export function useSearchTodos(
   return useQuery({
     queryKey: ['search_todos', args],
     queryFn: async () => {
-      const validated = SearchTodosArgsSchema.parse(args);
+      const argsResult = SearchTodosArgsSchema.safeParse(args);
+      if (!argsResult.success) {
+        throw new Error(
+          `Validation failed: ${argsResult.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(', ')}`
+        );
+      }
       const { data, error } = await supabase.rpc(
         'search_todos',
-        validated as never
+        argsResult.data as never
       );
       if (error) throw error;
-      return SearchTodosReturnsSchema.parse(data);
+      const returnsResult = SearchTodosReturnsSchema.safeParse(data);
+      if (!returnsResult.success) {
+        throw new Error(
+          `Response validation failed: ${returnsResult.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(', ')}`
+        );
+      }
+      return returnsResult.data;
     },
     ...options,
   });
