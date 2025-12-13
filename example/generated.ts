@@ -56,6 +56,7 @@ export const QueryOptionsSchema = z.object({
   sort: SortOptionSchema.optional(),
   pagination: PaginationSchema.optional(),
   select: z.string().optional(),
+  queryKey: z.array(z.unknown()).optional(),
 });
 export type QueryOptions = z.infer<typeof QueryOptionsSchema>;
 
@@ -251,7 +252,7 @@ export function useGetTodoItem(id: string) {
 
 export function useGetAllTodoItems(options?: QueryOptions) {
   return useQuery<PaginatedResponse<TodoItem>, Error>({
-    queryKey: ['todo_items', options],
+    queryKey: options?.queryKey ?? ['todo_items', options],
     queryFn: async () => {
       const { filters, sort, pagination, select: selectFields } = options || {};
       const page = pagination?.page || 1;
@@ -457,7 +458,7 @@ export function useGetProfile(id: string) {
 
 export function useGetAllProfiles(options?: QueryOptions) {
   return useQuery<PaginatedResponse<Profile>, Error>({
-    queryKey: ['profiles', options],
+    queryKey: options?.queryKey ?? ['profiles', options],
     queryFn: async () => {
       const { filters, sort, pagination, select: selectFields } = options || {};
       const page = pagination?.page || 1;
@@ -644,14 +645,15 @@ export function useBulkDeleteProfiles() {
 type GetUserProfileQueryOptions = Omit<
   UseQueryOptions<GetUserProfileReturns, Error>,
   'queryKey' | 'queryFn'
->;
+> & { queryKey?: unknown[] };
 
 export function useGetUserProfile(
   args: GetUserProfileArgs,
   options?: GetUserProfileQueryOptions
 ) {
+  const { queryKey, ...queryOptions } = options ?? {};
   return useQuery({
-    queryKey: ['get_user_profile', args],
+    queryKey: queryKey ?? ['get_user_profile', args],
     queryFn: async () => {
       const argsResult = GetUserProfileArgsSchema.safeParse(args);
       if (!argsResult.success) {
@@ -676,7 +678,7 @@ export function useGetUserProfile(
       }
       return returnsResult.data;
     },
-    ...options,
+    ...queryOptions,
   });
 }
 
@@ -731,14 +733,15 @@ export function useCreateTodo(options?: CreateTodoMutationOptions) {
 type GetUserTodosQueryOptions = Omit<
   UseQueryOptions<GetUserTodosReturns, Error>,
   'queryKey' | 'queryFn'
->;
+> & { queryKey?: unknown[] };
 
 export function useGetUserTodos(
   args: GetUserTodosArgs,
   options?: GetUserTodosQueryOptions
 ) {
+  const { queryKey, ...queryOptions } = options ?? {};
   return useQuery({
-    queryKey: ['get_user_todos', args],
+    queryKey: queryKey ?? ['get_user_todos', args],
     queryFn: async () => {
       const argsResult = GetUserTodosArgsSchema.safeParse(args);
       if (!argsResult.success) {
@@ -763,21 +766,22 @@ export function useGetUserTodos(
       }
       return returnsResult.data;
     },
-    ...options,
+    ...queryOptions,
   });
 }
 
 type SearchTodosQueryOptions = Omit<
   UseQueryOptions<SearchTodosReturns, Error>,
   'queryKey' | 'queryFn'
->;
+> & { queryKey?: unknown[] };
 
 export function useSearchTodos(
   args: SearchTodosArgs,
   options?: SearchTodosQueryOptions
 ) {
+  const { queryKey, ...queryOptions } = options ?? {};
   return useQuery({
-    queryKey: ['search_todos', args],
+    queryKey: queryKey ?? ['search_todos', args],
     queryFn: async () => {
       const argsResult = SearchTodosArgsSchema.safeParse(args);
       if (!argsResult.success) {
@@ -802,6 +806,6 @@ export function useSearchTodos(
       }
       return returnsResult.data;
     },
-    ...options,
+    ...queryOptions,
   });
 }

@@ -101,6 +101,7 @@ export const QueryOptionsSchema = z.object({
   sort: SortOptionSchema.optional(),
   pagination: PaginationSchema.optional(),
   select: z.string().optional(),
+  queryKey: z.array(z.unknown()).optional(),
 });
 export type QueryOptions = z.infer<typeof QueryOptionsSchema>;
 

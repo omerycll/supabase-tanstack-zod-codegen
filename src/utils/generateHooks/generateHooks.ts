@@ -88,7 +88,7 @@ export function generateHooks({
 }`,
     `export function ${toHookName({ operation: 'GetAll', tableName })}(options?: QueryOptions) {
   return useQuery<PaginatedResponse<${getRowType}>, Error>({
-    queryKey: ['${tableName}', options],
+    queryKey: options?.queryKey ?? ['${tableName}', options],
     queryFn: async () => {
       const { filters, sort, pagination, select: selectFields } = options || {};
       const page = pagination?.page || 1;

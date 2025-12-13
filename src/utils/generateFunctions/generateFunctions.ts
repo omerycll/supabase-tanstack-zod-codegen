@@ -352,11 +352,12 @@ export function ${hookName}(
     const returnsTypeName = `${pascalName}Returns`;
     const optionsTypeName = `${pascalName}QueryOptions`;
     // Generate useQuery hook for get/search and other functions
-    hooks.push(`type ${optionsTypeName} = Omit<UseQueryOptions<${returnsTypeName}, Error>, 'queryKey' | 'queryFn'>;
+    hooks.push(`type ${optionsTypeName} = Omit<UseQueryOptions<${returnsTypeName}, Error>, 'queryKey' | 'queryFn'> & { queryKey?: unknown[] };
 
 export function ${hookName}(args: ${argsTypeName}, options?: ${optionsTypeName}) {
+  const { queryKey, ...queryOptions } = options ?? {};
   return useQuery({
-    queryKey: ['${functionName}', args],
+    queryKey: queryKey ?? ['${functionName}', args],
     queryFn: async () => {
       const argsResult = ${argsSchemaName}.safeParse(args);
       if (!argsResult.success) {
@@ -370,7 +371,7 @@ export function ${hookName}(args: ${argsTypeName}, options?: ${optionsTypeName})
       }
       return returnsResult.data;
     },
-    ...options,
+    ...queryOptions,
   });
 }`);
   }
