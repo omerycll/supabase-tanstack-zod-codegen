@@ -216,27 +216,38 @@ export function generateFunctionSchemas({
   // Get Args type
   const argsProperty = funcType.getProperty('Args');
   if (argsProperty) {
-    const argsType = project
-      .getProgram()
-      .getTypeChecker()
-      .getTypeAtLocation(argsProperty.getValueDeclarationOrThrow());
+    const argsValueDeclaration = argsProperty.getValueDeclaration();
+    // Handle case where Args is 'never' (no arguments) - getValueDeclaration returns undefined
+    if (!argsValueDeclaration) {
+      schemas.push(`export const ${argsSchemaName} = z.object({});`);
+    } else {
+      const argsType = project
+        .getProgram()
+        .getTypeChecker()
+        .getTypeAtLocation(argsValueDeclaration);
 
-    const properties = argsType.getProperties();
-    const schemaFields: string[] = [];
-    for (const prop of properties) {
-      const propName = prop.getName();
-      const propType = prop.getTypeAtLocation(
-        prop.getValueDeclarationOrThrow()
-      );
-      const isOptional = prop.isOptional();
-      const zodType = typeToZodSchema(propType, isOptional);
-      schemaFields.push(`  ${propName}: ${zodType}`);
+      // Check if Args type is 'never'
+      if (argsType.getText() === 'never') {
+        schemas.push(`export const ${argsSchemaName} = z.object({});`);
+      } else {
+        const properties = argsType.getProperties();
+        const schemaFields: string[] = [];
+        for (const prop of properties) {
+          const propName = prop.getName();
+          const propValueDeclaration = prop.getValueDeclaration();
+          if (!propValueDeclaration) continue;
+          const propType = prop.getTypeAtLocation(propValueDeclaration);
+          const isOptional = prop.isOptional();
+          const zodType = typeToZodSchema(propType, isOptional);
+          schemaFields.push(`  ${propName}: ${zodType}`);
+        }
+        schemas.push(
+          `export const ${argsSchemaName} = z.object({\n${schemaFields.join(
+            ',\n'
+          )}\n});`
+        );
+      }
     }
-    schemas.push(
-      `export const ${argsSchemaName} = z.object({\n${schemaFields.join(
-        ',\n'
-      )}\n});`
-    );
   } else {
     schemas.push(`export const ${argsSchemaName} = z.object({});`);
   }
@@ -245,16 +256,32 @@ export function generateFunctionSchemas({
   // Function returns can always be null, so we always add .nullable()
   const returnsProperty = funcType.getProperty('Returns');
   if (returnsProperty) {
-    const returnsType = project
-      .getProgram()
-      .getTypeChecker()
-      .getTypeAtLocation(returnsProperty.getValueDeclarationOrThrow());
+    const returnsValueDeclaration = returnsProperty.getValueDeclaration();
+    // Handle case where Returns has no value declaration (e.g., Returns: undefined)
+    if (!returnsValueDeclaration) {
+      schemas.push(
+        `export const ${returnsSchemaName} = z.unknown().nullable();`
+      );
+    } else {
+      const returnsType = project
+        .getProgram()
+        .getTypeChecker()
+        .getTypeAtLocation(returnsValueDeclaration);
 
-    // forceNullable = true because function return fields can be null
-    const zodSchema = typeToZodSchema(returnsType, false, 0, true);
-    schemas.push(
-      `export const ${returnsSchemaName} = ${zodSchema}.nullable();`
-    );
+      // Check if Returns type is 'undefined' or 'never'
+      const returnsTypeText = returnsType.getText();
+      if (returnsTypeText === 'undefined' || returnsTypeText === 'never') {
+        schemas.push(
+          `export const ${returnsSchemaName} = z.undefined().nullable();`
+        );
+      } else {
+        // forceNullable = true because function return fields can be null
+        const zodSchema = typeToZodSchema(returnsType, false, 0, true);
+        schemas.push(
+          `export const ${returnsSchemaName} = ${zodSchema}.nullable();`
+        );
+      }
+    }
   } else {
     schemas.push(`export const ${returnsSchemaName} = z.unknown().nullable();`);
   }

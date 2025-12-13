@@ -112,7 +112,7 @@ export function generateHooks({
       const total = count || 0;
 
       return {
-        data: data as ${getRowType}[],
+        data: (data as unknown) as ${getRowType}[],
         pagination: {
           page,
           pageSize,
