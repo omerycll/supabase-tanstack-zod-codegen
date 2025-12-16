@@ -11,7 +11,8 @@
       "Bash(npm test:*)",
       "Bash(npm run generate:*)",
       "Bash(npm run:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []

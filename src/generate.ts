@@ -206,7 +206,12 @@ export default async function generate(config: Config) {
   // Helper to create imports
   const createZodImports = () => `import { z } from 'zod';`;
   const createReactQueryImports = () => `import { useMutation, useQuery, useQueryClient, UseMutationOptions, UseQueryOptions } from '@tanstack/react-query';`;
-  const createSupabaseImport = () => importSupabase({ relativeSupabasePath, supabaseExportName });
+
+  const createSupabaseImport = (outputFilePath?: string) => importSupabase({
+    relativeSupabasePath,
+    supabaseExportName,
+    outputFilePath,
+  });
 
   // Collect all files to write
   const filesToWrite: FileContent[] = [];
@@ -229,10 +234,11 @@ export default async function generate(config: Config) {
       ...Object.values(generated.functions).flatMap(f => f.hooks),
     ];
 
+    const resolvedPath = validateOutputPath(singleOutputPath, allowedOutputDir);
     const content = `
 ${createReactQueryImports()}
 ${createZodImports()}
-${createSupabaseImport()}
+${createSupabaseImport(singleOutputPath)}
 
 ${globalSchemas}
 
@@ -244,7 +250,7 @@ ${allHooks.join('\n\n')}
 `;
 
     filesToWrite.push({
-      path: validateOutputPath(singleOutputPath, allowedOutputDir),
+      path: resolvedPath,
       content,
     });
   } else if (output) {
@@ -297,10 +303,11 @@ ${tableContent.schemas.join('\n\n')}
       }
 
       if (hasTablesDir && output.tablesDir?.hooks) {
+        const hooksPath = applyTemplate(output.tablesDir.hooks, { table: tableName });
         const content = `
 ${createReactQueryImports()}
 ${createZodImports()}
-${createSupabaseImport()}
+${createSupabaseImport(hooksPath)}
 
 ${globalSchemas}
 
@@ -311,7 +318,7 @@ ${tableContent.schemas.join('\n\n')}
 ${tableContent.hooks.join('\n\n')}
 `;
         filesToWrite.push({
-          path: validateOutputPath(applyTemplate(output.tablesDir.hooks, { table: tableName }), allowedOutputDir),
+          path: validateOutputPath(hooksPath, allowedOutputDir),
           content,
         });
       } else if (!hasTablesDir) {
@@ -340,10 +347,11 @@ ${funcContent.schemas.join('\n\n')}
         }
 
         if (output.functionsDir?.hooks) {
+          const hooksPath = applyTemplate(output.functionsDir.hooks, { function: functionName });
           const content = `
 ${createReactQueryImports()}
 ${createZodImports()}
-${createSupabaseImport()}
+${createSupabaseImport(hooksPath)}
 
 ${globalSchemas}
 
@@ -354,7 +362,7 @@ ${funcContent.schemas.join('\n\n')}
 ${funcContent.hooks.join('\n\n')}
 `;
           filesToWrite.push({
-            path: validateOutputPath(applyTemplate(output.functionsDir.hooks, { function: functionName }), allowedOutputDir),
+            path: validateOutputPath(hooksPath, allowedOutputDir),
             content,
           });
         }
@@ -376,10 +384,11 @@ ${allFunctionsSchemas.join('\n\n')}
       }
 
       if (output.functions?.hooks) {
+        const hooksPath = output.functions.hooks;
         const content = `
 ${createReactQueryImports()}
 ${createZodImports()}
-${createSupabaseImport()}
+${createSupabaseImport(hooksPath)}
 
 ${globalSchemas}
 
@@ -390,7 +399,7 @@ ${allFunctionsSchemas.join('\n\n')}
 ${allFunctionsHooks.join('\n\n')}
 `;
         filesToWrite.push({
-          path: validateOutputPath(output.functions.hooks, allowedOutputDir),
+          path: validateOutputPath(hooksPath, allowedOutputDir),
           content,
         });
       } else {
@@ -418,10 +427,11 @@ ${separateSchemas.join('\n\n')}
     }
 
     if (output.hooks && separateHooks.length > 0) {
+      const hooksPath = output.hooks;
       const content = `
 ${createReactQueryImports()}
 ${createZodImports()}
-${createSupabaseImport()}
+${createSupabaseImport(hooksPath)}
 
 ${globalSchemas}
 
@@ -430,7 +440,7 @@ ${applyFiltersHelper}
 ${separateHooks.join('\n\n')}
 `;
       filesToWrite.push({
-        path: validateOutputPath(output.hooks, allowedOutputDir),
+        path: validateOutputPath(hooksPath, allowedOutputDir),
         content,
       });
     }

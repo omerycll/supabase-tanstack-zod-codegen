@@ -6,7 +6,7 @@ import {
   UseQueryOptions,
 } from '@tanstack/react-query';
 import { z } from 'zod';
-import { supabase } from './supabase';
+import { supabase } from '../../../supabase';
 
 // Filter operators
 export const FilterOperatorSchema = z.enum([
