@@ -1,0 +1,6 @@
+{
+  "typesPath": "./database.types.ts",
+  "outputPath": "./generated.ts",
+  "relativeSupabasePath": "./supabase",
+  "supabaseExportName": "supabase"
+}

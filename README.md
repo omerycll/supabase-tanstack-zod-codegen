@@ -47,17 +47,117 @@ supabase gen types typescript --project-id "<your-project-id>" --schema public >
 
 ### 2. Create config file
 
-Create `codegen.config.json`:
+Create `codegen.config.json`. There are multiple output modes available:
+
+#### Option A: Single File (Legacy)
+
+All generated code in one file:
 
 ```json
 {
   "outputPath": "src/generated.ts",
   "typesPath": "src/database.types.ts",
   "relativeSupabasePath": "./supabase",
-  "supabaseExportName": "supabase",
-  "prettierConfigPath": ".prettierrc"
+  "supabaseExportName": "supabase"
 }
 ```
+
+#### Option B: Separate Files (Hooks & Schemas)
+
+Split hooks and schemas into separate files:
+
+```json
+{
+  "typesPath": "src/database.types.ts",
+  "relativeSupabasePath": "./supabase",
+  "supabaseExportName": "supabase",
+  "output": {
+    "hooks": "src/generated/hooks.ts",
+    "schemas": "src/generated/schemas.ts"
+  }
+}
+```
+
+#### Option C: Per-Table/Function Files
+
+Each table and function gets its own directory with hooks and schemas:
+
+```json
+{
+  "typesPath": "src/database.types.ts",
+  "relativeSupabasePath": "./supabase",
+  "supabaseExportName": "supabase",
+  "output": {
+    "tablesDir": {
+      "hooks": "src/generated/tables/{{table}}/hooks.ts",
+      "schemas": "src/generated/tables/{{table}}/schemas.ts"
+    },
+    "functionsDir": {
+      "hooks": "src/generated/functions/{{function}}/hooks.ts",
+      "schemas": "src/generated/functions/{{function}}/schemas.ts"
+    },
+    "enums": {
+      "schemas": "src/generated/enums/schemas.ts"
+    }
+  }
+}
+```
+
+This generates a structure like:
+```
+src/generated/
+├── enums/
+│   └── schemas.ts
+├── tables/
+│   ├── todo_items/
+│   │   ├── hooks.ts
+│   │   └── schemas.ts
+│   └── profiles/
+│       ├── hooks.ts
+│       └── schemas.ts
+└── functions/
+    ├── get_user_profile/
+    │   ├── hooks.ts
+    │   └── schemas.ts
+    └── create_todo/
+        ├── hooks.ts
+        └── schemas.ts
+```
+
+#### Option D: Mixed (Tables Separate, Functions Combined)
+
+Split tables into separate files but keep all functions in one file:
+
+```json
+{
+  "typesPath": "src/database.types.ts",
+  "relativeSupabasePath": "./supabase",
+  "supabaseExportName": "supabase",
+  "output": {
+    "tablesDir": {
+      "hooks": "src/generated/tables/{{table}}/hooks.ts",
+      "schemas": "src/generated/tables/{{table}}/schemas.ts"
+    },
+    "functions": {
+      "hooks": "src/generated/functions/hooks.ts",
+      "schemas": "src/generated/functions/schemas.ts"
+    },
+    "enums": {
+      "schemas": "src/generated/enums/schemas.ts"
+    }
+  }
+}
+```
+
+**Template Placeholders:**
+- `{{table}}` - Replaced with the table name (e.g., `todo_items`, `profiles`)
+- `{{function}}` - Replaced with the function name (e.g., `get_user_profile`, `create_todo`)
+
+> **📁 Example config files** are available in the [example/](example/) directory:
+> - [codegen.config.json](example/codegen.config.json) - Single file output
+> - [codegen.separate.config.json](example/codegen.separate.config.json) - Separate hooks & schemas
+> - [codegen.per-table.config.json](example/codegen.per-table.config.json) - Per-table/function files
+> - [codegen.mixed.config.json](example/codegen.mixed.config.json) - Tables separate, functions combined
 
 ### 3. Run the generator
 
@@ -549,11 +649,31 @@ function TodoList() {
 
 | Option | Required | Description |
 |--------|----------|-------------|
-| `outputPath` | Yes | Path where generated code will be written |
 | `typesPath` | Yes | Path to Supabase generated types file |
+| `outputPath` | No* | Single file output path (legacy mode) |
+| `output` | No* | Flexible output configuration (see below) |
 | `relativeSupabasePath` | No | Relative path to your Supabase client from the output file |
 | `supabaseExportName` | No | Name of your Supabase client export (default: `supabase`) |
 | `prettierConfigPath` | No | Path to your Prettier config for formatting |
+
+\* Either `outputPath` or `output` must be provided.
+
+### Output Configuration
+
+When using `output` instead of `outputPath`, you have these options:
+
+| Option | Description |
+|--------|-------------|
+| `output.singleFile` | Single file output (alternative to `outputPath`) |
+| `output.hooks` | Path for all hooks in one file |
+| `output.schemas` | Path for all schemas in one file |
+| `output.tablesDir.hooks` | Template path for per-table hooks (use `{{table}}`) |
+| `output.tablesDir.schemas` | Template path for per-table schemas (use `{{table}}`) |
+| `output.functionsDir.hooks` | Template path for per-function hooks (use `{{function}}`) |
+| `output.functionsDir.schemas` | Template path for per-function schemas (use `{{function}}`) |
+| `output.functions.hooks` | Path for all function hooks in one file |
+| `output.functions.schemas` | Path for all function schemas in one file |
+| `output.enums.schemas` | Path for enum schemas |
 
 ## Generated Types Reference
 

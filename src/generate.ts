@@ -10,60 +10,53 @@ import { generateEnumSchemas, generateEnumTypes } from './utils/generateEnums/ge
 import { formatGeneratedContent } from './utils/formatGeneratedContent/formatGeneratedContent';
 import { importSupabase } from './utils/importSupabase/importSupabase';
 
+export interface OutputConfig {
+  // Single file output (legacy mode)
+  singleFile?: string;
+
+  // Separate file outputs (all in one file per type)
+  hooks?: string;        // Path for all hooks
+  schemas?: string;      // Path for all schemas (zod + types)
+
+  // Auto-split tables using template pattern
+  // Use {{table}} placeholder for table name
+  // Example: "./generated/tables/{{table}}/hooks.ts"
+  tablesDir?: {
+    hooks?: string;
+    schemas?: string;
+  };
+
+  // Auto-split functions using template pattern
+  // Use {{function}} placeholder for function name
+  // Example: "./generated/functions/{{function}}.ts"
+  functionsDir?: {
+    hooks?: string;
+    schemas?: string;
+  };
+
+  // Functions output (all functions in one file per type)
+  functions?: {
+    hooks?: string;
+    schemas?: string;
+  };
+
+  // Enums output
+  enums?: {
+    schemas?: string;
+  };
+}
+
 export interface Config {
-  outputPath: string;
+  outputPath?: string;   // Legacy: single file output
+  output?: OutputConfig; // New: flexible output configuration
   prettierConfigPath?: string;
   relativeSupabasePath?: string;
   supabaseExportName?: string;
   typesPath: string;
 }
 
-export default async function generate({
-  outputPath,
-  prettierConfigPath,
-  relativeSupabasePath,
-  supabaseExportName,
-  typesPath,
-}: Config) {
-  const allowedOutputDir = path.resolve(process.cwd());
-  const resolvedOutputPath = path.resolve(allowedOutputDir, outputPath);
-  if (!resolvedOutputPath.startsWith(allowedOutputDir)) {
-    throw new Error(
-      `Invalid output path: "${outputPath}". Writing files outside of the allowed directory is not allowed.`
-    );
-  }
-
-  const { tables, functions, enums, project } = getDatabaseProperties(typesPath);
-
-  const hooks: string[] = [];
-  const types: string[] = [];
-  const zodSchemas: string[] = [];
-
-  // Generate Enum schemas and types first (they might be used by tables/functions)
-  for (const enumSymbol of enums) {
-    const enumName = enumSymbol.getName();
-    zodSchemas.push(...generateEnumSchemas({ enumSymbol, enumName, project }));
-    types.push(...generateEnumTypes({ enumName }));
-  }
-
-  // Generate Table schemas, types and hooks
-  for (const table of tables) {
-    const tableName = table.getName();
-    zodSchemas.push(...generateZodSchemas({ table, tableName }));
-    types.push(...generateTypes({ tableName }));
-    hooks.push(...generateHooks({ supabaseExportName, tableName }));
-  }
-
-  // Generate Function schemas, types and hooks
-  for (const func of functions) {
-    const functionName = func.getName();
-    zodSchemas.push(...generateFunctionSchemas({ func, functionName, project, supabaseExportName }));
-    types.push(...generateFunctionTypes({ functionName }));
-    hooks.push(...generateFunctionHooks({ functionName, supabaseExportName }));
-  }
-
-  // Global filter and pagination schemas
-  const globalSchemas = `
+// Global filter and pagination schemas
+const globalSchemas = `
 // Filter operators
 export const FilterOperatorSchema = z.enum(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'is', 'in']);
 export type FilterOperator = z.infer<typeof FilterOperatorSchema>;
@@ -117,28 +110,342 @@ export interface PaginatedResponse<T> {
 }
 `;
 
-  // Create the output file content with imports and hooks
-  const generatedFileContent = `
-import { useMutation, useQuery, useQueryClient, UseMutationOptions, UseQueryOptions } from '@tanstack/react-query';
-import { z } from 'zod';
-${importSupabase({ relativeSupabasePath, supabaseExportName })}
+function validateOutputPath(outputPath: string, allowedOutputDir: string): string {
+  const resolvedPath = path.resolve(allowedOutputDir, outputPath);
+  if (!resolvedPath.startsWith(allowedOutputDir)) {
+    throw new Error(
+      `Invalid output path: "${outputPath}". Writing files outside of the allowed directory is not allowed.`
+    );
+  }
+  return resolvedPath;
+}
+
+function ensureDirectoryExists(filePath: string): void {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+interface FileContent {
+  path: string;
+  content: string;
+}
+
+interface GeneratedContent {
+  // Per-table content
+  tables: {
+    [tableName: string]: {
+      hooks: string[];
+      schemas: string[]; // zod + types combined
+    };
+  };
+  // Per-function content
+  functions: {
+    [functionName: string]: {
+      hooks: string[];
+      schemas: string[]; // zod + types combined
+    };
+  };
+  // Enums content
+  enums: {
+    schemas: string[]; // zod + types combined
+  };
+}
+
+export default async function generate(config: Config) {
+  const {
+    outputPath,
+    output,
+    prettierConfigPath,
+    relativeSupabasePath,
+    supabaseExportName,
+    typesPath,
+  } = config;
+
+  const allowedOutputDir = path.resolve(process.cwd());
+  const { tables, functions, enums, project } = getDatabaseProperties(typesPath);
+
+  // Collect all generated content
+  const generated: GeneratedContent = {
+    tables: {},
+    functions: {},
+    enums: { schemas: [] },
+  };
+
+  // Generate Enum schemas and types (combined into schemas)
+  for (const enumSymbol of enums) {
+    const enumName = enumSymbol.getName();
+    const zodSchemas = generateEnumSchemas({ enumSymbol, enumName, project });
+    const types = generateEnumTypes({ enumName });
+    generated.enums.schemas.push(...zodSchemas, ...types);
+  }
+
+  // Generate Table schemas, types and hooks
+  for (const table of tables) {
+    const tableName = table.getName();
+    const zodSchemas = generateZodSchemas({ table, tableName });
+    const types = generateTypes({ tableName });
+    generated.tables[tableName] = {
+      hooks: generateHooks({ supabaseExportName, tableName }),
+      schemas: [...zodSchemas, ...types],
+    };
+  }
+
+  // Generate Function schemas, types and hooks
+  for (const func of functions) {
+    const functionName = func.getName();
+    const zodSchemas = generateFunctionSchemas({ func, functionName, project, supabaseExportName });
+    const types = generateFunctionTypes({ functionName });
+    generated.functions[functionName] = {
+      schemas: [...zodSchemas, ...types],
+      hooks: generateFunctionHooks({ functionName, supabaseExportName }),
+    };
+  }
+
+  // Helper to create imports
+  const createZodImports = () => `import { z } from 'zod';`;
+  const createReactQueryImports = () => `import { useMutation, useQuery, useQueryClient, UseMutationOptions, UseQueryOptions } from '@tanstack/react-query';`;
+  const createSupabaseImport = () => importSupabase({ relativeSupabasePath, supabaseExportName });
+
+  // Collect all files to write
+  const filesToWrite: FileContent[] = [];
+
+  // Determine output mode
+  if (outputPath || output?.singleFile) {
+    // Legacy mode: single file output
+    const singleOutputPath = outputPath || output?.singleFile;
+    if (!singleOutputPath) {
+      throw new Error('Either outputPath or output.singleFile must be provided');
+    }
+
+    const allSchemas = [
+      ...generated.enums.schemas,
+      ...Object.values(generated.tables).flatMap(t => t.schemas),
+      ...Object.values(generated.functions).flatMap(f => f.schemas),
+    ];
+    const allHooks = [
+      ...Object.values(generated.tables).flatMap(t => t.hooks),
+      ...Object.values(generated.functions).flatMap(f => f.hooks),
+    ];
+
+    const content = `
+${createReactQueryImports()}
+${createZodImports()}
+${createSupabaseImport()}
 
 ${globalSchemas}
 
 ${applyFiltersHelper}
 
-${zodSchemas.join('\n\n')}
+${allSchemas.join('\n\n')}
 
-${types.join('\n')}
-
-${hooks.join('\n\n')}
+${allHooks.join('\n\n')}
 `;
 
-  const formattedFileContent = await formatGeneratedContent({
-    generatedFileContent,
-    prettierConfigPath,
-  });
+    filesToWrite.push({
+      path: validateOutputPath(singleOutputPath, allowedOutputDir),
+      content,
+    });
+  } else if (output) {
+    // New mode: separate file outputs
 
-  // Write the output file
-  fs.writeFileSync(resolvedOutputPath, formattedFileContent);
+    // Collect content for separate files
+    const separateSchemas: string[] = [];
+    const separateHooks: string[] = [];
+
+    // Process enums
+    if (output.enums?.schemas) {
+      const content = `
+${createZodImports()}
+
+${generated.enums.schemas.join('\n\n')}
+`;
+      filesToWrite.push({
+        path: validateOutputPath(output.enums.schemas, allowedOutputDir),
+        content,
+      });
+    } else {
+      separateSchemas.push(...generated.enums.schemas);
+    }
+
+    // Helper to replace template placeholders
+    const applyTemplate = (template: string, replacements: Record<string, string>): string => {
+      let result = template;
+      for (const [key, value] of Object.entries(replacements)) {
+        result = result.replace(new RegExp(`{{${key}}}`, 'g'), value);
+      }
+      return result;
+    };
+
+    // Process tables
+    for (const [tableName, tableContent] of Object.entries(generated.tables)) {
+      const hasTablesDir = output.tablesDir?.schemas || output.tablesDir?.hooks;
+
+      if (hasTablesDir && output.tablesDir?.schemas) {
+        const content = `
+${createZodImports()}
+
+${tableContent.schemas.join('\n\n')}
+`;
+        filesToWrite.push({
+          path: validateOutputPath(applyTemplate(output.tablesDir.schemas, { table: tableName }), allowedOutputDir),
+          content,
+        });
+      } else if (!hasTablesDir) {
+        separateSchemas.push(...tableContent.schemas);
+      }
+
+      if (hasTablesDir && output.tablesDir?.hooks) {
+        const content = `
+${createReactQueryImports()}
+${createZodImports()}
+${createSupabaseImport()}
+
+${globalSchemas}
+
+${applyFiltersHelper}
+
+${tableContent.schemas.join('\n\n')}
+
+${tableContent.hooks.join('\n\n')}
+`;
+        filesToWrite.push({
+          path: validateOutputPath(applyTemplate(output.tablesDir.hooks, { table: tableName }), allowedOutputDir),
+          content,
+        });
+      } else if (!hasTablesDir) {
+        separateHooks.push(...tableContent.hooks);
+      }
+    }
+
+    // Process functions
+    const hasFunctionsDir = output.functionsDir?.schemas || output.functionsDir?.hooks;
+    const allFunctionsSchemas = Object.values(generated.functions).flatMap(f => f.schemas);
+    const allFunctionsHooks = Object.values(generated.functions).flatMap(f => f.hooks);
+
+    if (hasFunctionsDir) {
+      // Per-function file output
+      for (const [functionName, funcContent] of Object.entries(generated.functions)) {
+        if (output.functionsDir?.schemas) {
+          const content = `
+${createZodImports()}
+
+${funcContent.schemas.join('\n\n')}
+`;
+          filesToWrite.push({
+            path: validateOutputPath(applyTemplate(output.functionsDir.schemas, { function: functionName }), allowedOutputDir),
+            content,
+          });
+        }
+
+        if (output.functionsDir?.hooks) {
+          const content = `
+${createReactQueryImports()}
+${createZodImports()}
+${createSupabaseImport()}
+
+${globalSchemas}
+
+${applyFiltersHelper}
+
+${funcContent.schemas.join('\n\n')}
+
+${funcContent.hooks.join('\n\n')}
+`;
+          filesToWrite.push({
+            path: validateOutputPath(applyTemplate(output.functionsDir.hooks, { function: functionName }), allowedOutputDir),
+            content,
+          });
+        }
+      }
+    } else if (output.functions?.schemas || output.functions?.hooks) {
+      // All functions in single files per type
+      if (output.functions?.schemas) {
+        const content = `
+${createZodImports()}
+
+${allFunctionsSchemas.join('\n\n')}
+`;
+        filesToWrite.push({
+          path: validateOutputPath(output.functions.schemas, allowedOutputDir),
+          content,
+        });
+      } else {
+        separateSchemas.push(...allFunctionsSchemas);
+      }
+
+      if (output.functions?.hooks) {
+        const content = `
+${createReactQueryImports()}
+${createZodImports()}
+${createSupabaseImport()}
+
+${globalSchemas}
+
+${applyFiltersHelper}
+
+${allFunctionsSchemas.join('\n\n')}
+
+${allFunctionsHooks.join('\n\n')}
+`;
+        filesToWrite.push({
+          path: validateOutputPath(output.functions.hooks, allowedOutputDir),
+          content,
+        });
+      } else {
+        separateHooks.push(...allFunctionsHooks);
+      }
+    } else {
+      // Add to separate collections
+      separateSchemas.push(...allFunctionsSchemas);
+      separateHooks.push(...allFunctionsHooks);
+    }
+
+    // Write remaining content to global files
+    if (output.schemas && separateSchemas.length > 0) {
+      const content = `
+${createZodImports()}
+
+${globalSchemas}
+
+${separateSchemas.join('\n\n')}
+`;
+      filesToWrite.push({
+        path: validateOutputPath(output.schemas, allowedOutputDir),
+        content,
+      });
+    }
+
+    if (output.hooks && separateHooks.length > 0) {
+      const content = `
+${createReactQueryImports()}
+${createZodImports()}
+${createSupabaseImport()}
+
+${globalSchemas}
+
+${applyFiltersHelper}
+
+${separateHooks.join('\n\n')}
+`;
+      filesToWrite.push({
+        path: validateOutputPath(output.hooks, allowedOutputDir),
+        content,
+      });
+    }
+  } else {
+    throw new Error('Either outputPath or output configuration must be provided');
+  }
+
+  // Format and write all files
+  for (const file of filesToWrite) {
+    const formattedContent = await formatGeneratedContent({
+      generatedFileContent: file.content,
+      prettierConfigPath,
+    });
+    ensureDirectoryExists(file.path);
+    fs.writeFileSync(file.path, formattedContent);
+    console.log(`Generated: ${file.path}`);
+  }
 }

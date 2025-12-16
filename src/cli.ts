@@ -13,7 +13,7 @@ interface CliConfig extends Config {
 yargs(hideBin(process.argv))
   .command(
     'generate [configPath]',
-    'Generate hooks',
+    'Generate hooks, types, and zod schemas',
     (yargs) => {
       return yargs
         .positional('configPath', {
@@ -21,16 +21,16 @@ yargs(hideBin(process.argv))
           type: 'string',
         })
         .options({
-          outputPath: { type: 'string' },
-          prettierConfigPath: { type: 'string' },
-          relativeSupabasePath: { type: 'string' },
-          supabaseExportName: { type: 'string' },
-          typesPath: { type: 'string' },
+          outputPath: { type: 'string', description: 'Single file output path (legacy mode)' },
+          prettierConfigPath: { type: 'string', description: 'Path to prettier config' },
+          relativeSupabasePath: { type: 'string', description: 'Relative path to supabase client' },
+          supabaseExportName: { type: 'string', description: 'Name of supabase export' },
+          typesPath: { type: 'string', description: 'Path to supabase types file' },
         })
         .check((argv) => {
-          if (!argv.configPath && (!argv.outputPath || !argv.typesPath)) {
+          if (!argv.configPath && !argv.typesPath) {
             throw new Error(
-              'When "configPath" is not provided, both "outputPath" and "typesPath" must be provided.'
+              'When "configPath" is not provided, "typesPath" must be provided.'
             );
           }
           return true;

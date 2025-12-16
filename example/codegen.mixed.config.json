@@ -1,0 +1,18 @@
+{
+  "typesPath": "./database.types.ts",
+  "relativeSupabasePath": "./supabase",
+  "supabaseExportName": "supabase",
+  "output": {
+    "tablesDir": {
+      "hooks": "./generated/tables/{{table}}/hooks.ts",
+      "schemas": "./generated/tables/{{table}}/schemas.ts"
+    },
+    "functions": {
+      "hooks": "./generated/functions/hooks.ts",
+      "schemas": "./generated/functions/schemas.ts"
+    },
+    "enums": {
+      "schemas": "./generated/enums/schemas.ts"
+    }
+  }
+}

@@ -10,7 +10,8 @@
       "Bash(npm run test:*)",
       "Bash(npm test:*)",
       "Bash(npm run generate:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []
