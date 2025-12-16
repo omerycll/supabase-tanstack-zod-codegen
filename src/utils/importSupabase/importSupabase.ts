@@ -1,3 +1,5 @@
+import path from 'path';
+
 interface ImportSupabaseArgs {
   relativeSupabasePath?: string;
   supabaseExportName?: string;
@@ -5,13 +7,11 @@ interface ImportSupabaseArgs {
 }
 
 /**
- * Adjusts a relative path based on the depth of the output file.
- * The relativeSupabasePath is relative to the config file location (root).
- * We need to adjust it based on how deep the output file is.
+ * Calculates relative path from output file to supabase file.
+ * Both paths are relative to the config file location (root).
  *
- * For example, if relativeSupabasePath is "./supabase" and outputFilePath is
- * "./generated/tables/todo_items/hooks.ts", we need to go up 3 directories
- * to get back to root, so the result is "../../../supabase".
+ * For example, if relativeSupabasePath is "./example/supabase" and outputFilePath is
+ * "./example/generated/tables/todo_items/hooks.ts", the result should be "../../../supabase".
  */
 function adjustRelativePath(
   relativePath: string,
@@ -21,25 +21,22 @@ function adjustRelativePath(
     return relativePath;
   }
 
-  // Count how many directories deep the output file is
-  // "./generated/tables/todo_items/hooks.ts" -> ["generated", "tables", "todo_items", "hooks.ts"]
-  // We need to go up (count - 1) times to get to root (excluding the filename)
-  const parts = outputFilePath.split('/').filter(p => p && p !== '.');
-  const depth = parts.length - 1; // -1 for the filename
+  // Normalize paths - remove leading "./"
+  const normalizedSupabase = relativePath.replace(/^\.\//, '');
+  const normalizedOutput = outputFilePath.replace(/^\.\//, '');
 
-  if (depth <= 0) {
-    return relativePath;
+  // Get the directory of the output file
+  const outputDir = path.dirname(normalizedOutput);
+
+  // Calculate relative path from output directory to supabase file
+  const relativeTo = path.relative(outputDir, normalizedSupabase);
+
+  // Ensure it starts with "./" or "../"
+  if (!relativeTo.startsWith('.')) {
+    return './' + relativeTo;
   }
 
-  // Add "../" for each level to go back to root
-  const prefix = '../'.repeat(depth);
-
-  // If relativePath starts with "./", remove it before adding prefix
-  if (relativePath.startsWith('./')) {
-    return prefix + relativePath.slice(2);
-  }
-
-  return prefix + relativePath;
+  return relativeTo;
 }
 
 export function importSupabase({

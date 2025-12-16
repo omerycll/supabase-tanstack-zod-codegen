@@ -9,7 +9,7 @@ interface GenerateHooksArg {
 
 // Helper function to apply filters to a Supabase query
 export const applyFiltersHelper = `
-function applyFilters<T>(query: T, filters?: FilterCondition[]): T {
+export function applyFilters<T>(query: T, filters?: FilterCondition[]): T {
   if (!filters || filters.length === 0) return query;
 
   let result = query as any;

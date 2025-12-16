@@ -306,7 +306,7 @@ export function generateFunctionTypes({
   ];
 }
 
-function isMutationFunction(functionName: string): boolean {
+export function isMutationFunction(functionName: string): boolean {
   const mutationPrefixes = [
     'add',
     'create',

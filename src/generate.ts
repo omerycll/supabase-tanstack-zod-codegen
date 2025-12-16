@@ -5,7 +5,7 @@ import { getDatabaseProperties } from './utils/getTablesProperties/getTablesProp
 import { generateTypes } from './utils/generateTypes/generateTypes';
 import { generateHooks, applyFiltersHelper } from './utils/generateHooks/generateHooks';
 import { generateZodSchemas } from './utils/generateZodSchemas/generateZodSchemas';
-import { generateFunctionSchemas, generateFunctionTypes, generateFunctionHooks } from './utils/generateFunctions/generateFunctions';
+import { generateFunctionSchemas, generateFunctionTypes, generateFunctionHooks, isMutationFunction } from './utils/generateFunctions/generateFunctions';
 import { generateEnumSchemas, generateEnumTypes } from './utils/generateEnums/generateEnums';
 import { formatGeneratedContent } from './utils/formatGeneratedContent/formatGeneratedContent';
 import { importSupabase } from './utils/importSupabase/importSupabase';
@@ -44,6 +44,9 @@ export interface OutputConfig {
   enums?: {
     schemas?: string;
   };
+
+  // Common utilities (filter schemas, applyFilters helper, etc.)
+  common?: string;
 }
 
 export interface Config {
@@ -109,6 +112,57 @@ export interface PaginatedResponse<T> {
   };
 }
 `;
+
+// Helper to convert table name to PascalCase singular
+function toPascalCaseSingular(tableName: string): string {
+  const { singular } = require('pluralize');
+  const pascalCase = tableName.replace(/(?:^|_|-)(\w)/g, (_: string, char: string) =>
+    char.toUpperCase()
+  );
+  return singular(pascalCase);
+}
+
+// Helper to convert function name to PascalCase
+function toPascalCase(name: string): string {
+  return name.replace(/(?:^|_|-)(\w)/g, (_: string, char: string) =>
+    char.toUpperCase()
+  );
+}
+
+// Get table schema exports for import statement (only used ones)
+function getTableSchemaExports(tableName: string): string {
+  const singular = toPascalCaseSingular(tableName);
+  return [
+    `Add${singular}RequestSchema`,
+    `Update${singular}RequestSchema`,
+    singular,
+    `Add${singular}Request`,
+    `Update${singular}Request`,
+  ].join(', ');
+}
+
+// Get function schema exports for import statement
+function getFunctionSchemaExports(functionName: string): string {
+  const pascal = toPascalCase(functionName);
+  return [
+    `${pascal}ArgsSchema`,
+    `${pascal}ReturnsSchema`,
+    `${pascal}Args`,
+    `${pascal}Returns`,
+  ].join(', ');
+}
+
+// Get relative import path from one file to another
+function getRelativeImportPath(fromPath: string, toPath: string): string {
+  const fromDir = path.dirname(fromPath);
+  const toFile = path.basename(toPath, path.extname(toPath));
+  const relativePath = path.relative(fromDir, path.dirname(toPath));
+
+  if (relativePath === '') {
+    return `./${toFile}`;
+  }
+  return `${relativePath.startsWith('.') ? '' : './'}${relativePath}/${toFile}`;
+}
 
 function validateOutputPath(outputPath: string, allowedOutputDir: string): string {
   const resolvedPath = path.resolve(allowedOutputDir, outputPath);
@@ -205,7 +259,14 @@ export default async function generate(config: Config) {
 
   // Helper to create imports
   const createZodImports = () => `import { z } from 'zod';`;
-  const createReactQueryImports = () => `import { useMutation, useQuery, useQueryClient, UseMutationOptions, UseQueryOptions } from '@tanstack/react-query';`;
+  // Tables use QueryOptions/PaginatedResponse from common, don't need UseMutationOptions/UseQueryOptions
+  const createReactQueryImportsForTables = () => `import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';`;
+  // Mutation functions need useMutation, useQueryClient, UseMutationOptions
+  const createReactQueryImportsForMutation = () => `import { useMutation, useQueryClient, UseMutationOptions } from '@tanstack/react-query';`;
+  // Query functions need useQuery, UseQueryOptions
+  const createReactQueryImportsForQuery = () => `import { useQuery, UseQueryOptions } from '@tanstack/react-query';`;
+  // Mixed functions (when we don't know) - includes everything
+  const createReactQueryImportsForFunctions = () => `import { useMutation, useQuery, useQueryClient, UseMutationOptions, UseQueryOptions } from '@tanstack/react-query';`;
 
   const createSupabaseImport = (outputFilePath?: string) => importSupabase({
     relativeSupabasePath,
@@ -236,7 +297,7 @@ export default async function generate(config: Config) {
 
     const resolvedPath = validateOutputPath(singleOutputPath, allowedOutputDir);
     const content = `
-${createReactQueryImports()}
+${createReactQueryImportsForFunctions()}
 ${createZodImports()}
 ${createSupabaseImport(singleOutputPath)}
 
@@ -284,6 +345,28 @@ ${generated.enums.schemas.join('\n\n')}
       return result;
     };
 
+    // Generate common utilities file if path is provided
+    if (output.common) {
+      const content = `
+${createZodImports()}
+
+${globalSchemas}
+
+${applyFiltersHelper}
+`;
+      filesToWrite.push({
+        path: validateOutputPath(output.common, allowedOutputDir),
+        content,
+      });
+    }
+
+    // Helper to create common import if common path is provided
+    const createCommonImport = (fromPath: string): string => {
+      if (!output.common) return '';
+      const relativePath = getRelativeImportPath(fromPath, output.common);
+      return `import { QueryOptions, PaginatedResponse, applyFilters } from '${relativePath}';`;
+    };
+
     // Process tables
     for (const [tableName, tableContent] of Object.entries(generated.tables)) {
       const hasTablesDir = output.tablesDir?.schemas || output.tablesDir?.hooks;
@@ -304,16 +387,32 @@ ${tableContent.schemas.join('\n\n')}
 
       if (hasTablesDir && output.tablesDir?.hooks) {
         const hooksPath = applyTemplate(output.tablesDir.hooks, { table: tableName });
-        const content = `
-${createReactQueryImports()}
+        // Calculate relative import path from hooks to schemas
+        const schemasPath = output.tablesDir.schemas
+          ? applyTemplate(output.tablesDir.schemas, { table: tableName })
+          : null;
+        const schemaImport = schemasPath
+          ? `import { ${getTableSchemaExports(tableName)} } from './schemas';`
+          : '';
+        const commonImport = createCommonImport(hooksPath);
+        const content = output.common
+          ? `
+${createReactQueryImportsForTables()}
+${createSupabaseImport(hooksPath)}
+${schemaImport}
+${commonImport}
+
+${tableContent.hooks.join('\n\n')}
+`
+          : `
+${createReactQueryImportsForTables()}
 ${createZodImports()}
 ${createSupabaseImport(hooksPath)}
+${schemaImport}
 
 ${globalSchemas}
 
 ${applyFiltersHelper}
-
-${tableContent.schemas.join('\n\n')}
 
 ${tableContent.hooks.join('\n\n')}
 `;
@@ -348,16 +447,21 @@ ${funcContent.schemas.join('\n\n')}
 
         if (output.functionsDir?.hooks) {
           const hooksPath = applyTemplate(output.functionsDir.hooks, { function: functionName });
+          // Calculate relative import path from hooks to schemas
+          const schemasPath = output.functionsDir.schemas
+            ? applyTemplate(output.functionsDir.schemas, { function: functionName })
+            : null;
+          const schemaImport = schemasPath
+            ? `import { ${getFunctionSchemaExports(functionName)} } from './schemas';`
+            : '';
+          // Use appropriate imports based on function type
+          const reactQueryImport = isMutationFunction(functionName)
+            ? createReactQueryImportsForMutation()
+            : createReactQueryImportsForQuery();
           const content = `
-${createReactQueryImports()}
-${createZodImports()}
+${reactQueryImport}
 ${createSupabaseImport(hooksPath)}
-
-${globalSchemas}
-
-${applyFiltersHelper}
-
-${funcContent.schemas.join('\n\n')}
+${schemaImport}
 
 ${funcContent.hooks.join('\n\n')}
 `;
@@ -385,16 +489,15 @@ ${allFunctionsSchemas.join('\n\n')}
 
       if (output.functions?.hooks) {
         const hooksPath = output.functions.hooks;
+        // Calculate relative import path from hooks to schemas
+        const schemaImport = output.functions.schemas
+          ? `import { ${Object.keys(generated.functions).map(fn => getFunctionSchemaExports(fn)).join(', ')} } from '${getRelativeImportPath(hooksPath, output.functions.schemas)}';`
+          : '';
+        // Functions don't need common imports (no QueryOptions/PaginatedResponse/applyFilters)
         const content = `
-${createReactQueryImports()}
-${createZodImports()}
+${createReactQueryImportsForFunctions()}
 ${createSupabaseImport(hooksPath)}
-
-${globalSchemas}
-
-${applyFiltersHelper}
-
-${allFunctionsSchemas.join('\n\n')}
+${schemaImport}
 
 ${allFunctionsHooks.join('\n\n')}
 `;
@@ -428,8 +531,18 @@ ${separateSchemas.join('\n\n')}
 
     if (output.hooks && separateHooks.length > 0) {
       const hooksPath = output.hooks;
-      const content = `
-${createReactQueryImports()}
+      const commonImport = createCommonImport(hooksPath);
+      // Use functions imports because it may contain both tables and functions
+      const content = output.common
+        ? `
+${createReactQueryImportsForFunctions()}
+${createSupabaseImport(hooksPath)}
+${commonImport}
+
+${separateHooks.join('\n\n')}
+`
+        : `
+${createReactQueryImportsForFunctions()}
 ${createZodImports()}
 ${createSupabaseImport(hooksPath)}
 
