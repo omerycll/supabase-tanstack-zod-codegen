@@ -69,9 +69,10 @@ export function useGetAllProfiles(options?: QueryOptions) {
   });
 }
 
-export function useAddProfile() {
+export function useAddProfile(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['profiles', 'add'],
     mutationFn: async (item: AddProfileRequest) => {
       const result = AddProfileRequestSchema.safeParse(item);
       if (!result.success) {
@@ -95,9 +96,10 @@ export function useAddProfile() {
   });
 }
 
-export function useUpdateProfile() {
+export function useUpdateProfile(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['profiles', 'update'],
     mutationFn: async (item: UpdateProfileRequest) => {
       const result = UpdateProfileRequestSchema.safeParse(item);
       if (!result.success) {
@@ -123,9 +125,10 @@ export function useUpdateProfile() {
   });
 }
 
-export function useDeleteProfile() {
+export function useDeleteProfile(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['profiles', 'delete'],
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('profiles').delete().eq('id', id);
       if (error) throw error;
@@ -137,9 +140,10 @@ export function useDeleteProfile() {
   });
 }
 
-export function useBulkAddProfiles() {
+export function useBulkAddProfiles(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['profiles', 'bulkAdd'],
     mutationFn: async (items: AddProfileRequest[]) => {
       const validated: AddProfileRequest[] = [];
       for (let i = 0; i < items.length; i++) {
@@ -166,9 +170,10 @@ export function useBulkAddProfiles() {
   });
 }
 
-export function useBulkUpdateProfiles() {
+export function useBulkUpdateProfiles(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['profiles', 'bulkUpdate'],
     mutationFn: async (items: UpdateProfileRequest[]) => {
       const results: Profile[] = [];
       for (let i = 0; i < items.length; i++) {
@@ -198,9 +203,10 @@ export function useBulkUpdateProfiles() {
   });
 }
 
-export function useBulkDeleteProfiles() {
+export function useBulkDeleteProfiles(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['profiles', 'bulkDelete'],
     mutationFn: async (ids: string[]) => {
       const { error } = await supabase.from('profiles').delete().in('id', ids);
       if (error) throw error;

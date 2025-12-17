@@ -124,9 +124,10 @@ export function generateHooks({
     enabled: options?.enabled ?? true,
   });
 }`,
-    `export function ${toHookName({ operation: 'Add', tableName })}() {
+    `export function ${toHookName({ operation: 'Add', tableName })}(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['${tableName}', 'add'],
     mutationFn: async (item: ${addRowType}) => {
       const result = ${addSchema}.safeParse(item);
       if (!result.success) {
@@ -145,9 +146,10 @@ export function generateHooks({
     },
   });
 }`,
-    `export function ${toHookName({ operation: 'Update', tableName })}() {
+    `export function ${toHookName({ operation: 'Update', tableName })}(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['${tableName}', 'update'],
     mutationFn: async (item: ${updateRowType}) => {
       const result = ${updateSchema}.safeParse(item);
       if (!result.success) {
@@ -168,9 +170,10 @@ export function generateHooks({
     },
   });
 }`,
-    `export function ${toHookName({ operation: 'Delete', tableName })}() {
+    `export function ${toHookName({ operation: 'Delete', tableName })}(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['${tableName}', 'delete'],
     mutationFn: async (id: string) => {
       const { error } = await ${supabase}
         .from('${tableName}')
@@ -185,9 +188,10 @@ export function generateHooks({
   });
 }`,
     // Bulk Add
-    `export function ${toHookName({ operation: 'BulkAdd', tableName })}() {
+    `export function ${toHookName({ operation: 'BulkAdd', tableName })}(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['${tableName}', 'bulkAdd'],
     mutationFn: async (items: ${addRowType}[]) => {
       const validated: ${addRowType}[] = [];
       for (let i = 0; i < items.length; i++) {
@@ -210,9 +214,10 @@ export function generateHooks({
   });
 }`,
     // Bulk Update
-    `export function ${toHookName({ operation: 'BulkUpdate', tableName })}() {
+    `export function ${toHookName({ operation: 'BulkUpdate', tableName })}(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['${tableName}', 'bulkUpdate'],
     mutationFn: async (items: ${updateRowType}[]) => {
       const results: ${getRowType}[] = [];
       for (let i = 0; i < items.length; i++) {
@@ -238,9 +243,10 @@ export function generateHooks({
   });
 }`,
     // Bulk Delete
-    `export function ${toHookName({ operation: 'BulkDelete', tableName })}() {
+    `export function ${toHookName({ operation: 'BulkDelete', tableName })}(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['${tableName}', 'bulkDelete'],
     mutationFn: async (ids: string[]) => {
       const { error } = await ${supabase}
         .from('${tableName}')

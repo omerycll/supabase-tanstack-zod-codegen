@@ -69,9 +69,10 @@ export function useGetAllTodoItems(options?: QueryOptions) {
   });
 }
 
-export function useAddTodoItem() {
+export function useAddTodoItem(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['todo_items', 'add'],
     mutationFn: async (item: AddTodoItemRequest) => {
       const result = AddTodoItemRequestSchema.safeParse(item);
       if (!result.success) {
@@ -95,9 +96,10 @@ export function useAddTodoItem() {
   });
 }
 
-export function useUpdateTodoItem() {
+export function useUpdateTodoItem(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['todo_items', 'update'],
     mutationFn: async (item: UpdateTodoItemRequest) => {
       const result = UpdateTodoItemRequestSchema.safeParse(item);
       if (!result.success) {
@@ -123,9 +125,10 @@ export function useUpdateTodoItem() {
   });
 }
 
-export function useDeleteTodoItem() {
+export function useDeleteTodoItem(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['todo_items', 'delete'],
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('todo_items').delete().eq('id', id);
       if (error) throw error;
@@ -137,9 +140,10 @@ export function useDeleteTodoItem() {
   });
 }
 
-export function useBulkAddTodoItems() {
+export function useBulkAddTodoItems(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['todo_items', 'bulkAdd'],
     mutationFn: async (items: AddTodoItemRequest[]) => {
       const validated: AddTodoItemRequest[] = [];
       for (let i = 0; i < items.length; i++) {
@@ -166,9 +170,10 @@ export function useBulkAddTodoItems() {
   });
 }
 
-export function useBulkUpdateTodoItems() {
+export function useBulkUpdateTodoItems(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['todo_items', 'bulkUpdate'],
     mutationFn: async (items: UpdateTodoItemRequest[]) => {
       const results: TodoItem[] = [];
       for (let i = 0; i < items.length; i++) {
@@ -198,9 +203,10 @@ export function useBulkUpdateTodoItems() {
   });
 }
 
-export function useBulkDeleteTodoItems() {
+export function useBulkDeleteTodoItems(options?: { mutationKey?: unknown[] }) {
   const queryClient = useQueryClient();
   return useMutation({
+    mutationKey: options?.mutationKey ?? ['todo_items', 'bulkDelete'],
     mutationFn: async (ids: string[]) => {
       const { error } = await supabase
         .from('todo_items')
