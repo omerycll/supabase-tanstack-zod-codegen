@@ -16,13 +16,16 @@ interface CreateTodoMutationOptions
     UseMutationOptions<CreateTodoReturns, Error, CreateTodoArgs, unknown>,
     'mutationFn'
   > {
+  mutationKey?: unknown[];
   queryInvalidate?: string[][];
 }
 
 export function useCreateTodo(options?: CreateTodoMutationOptions) {
   const queryClient = useQueryClient();
-  const { queryInvalidate, onSuccess, ...mutationOptions } = options ?? {};
+  const { mutationKey, queryInvalidate, onSuccess, ...mutationOptions } =
+    options ?? {};
   return useMutation({
+    mutationKey: mutationKey ?? ['create_todo'],
     mutationFn: async (args: CreateTodoArgs) => {
       const argsResult = CreateTodoArgsSchema.safeParse(args);
       if (!argsResult.success) {

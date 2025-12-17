@@ -342,6 +342,7 @@ export function generateFunctionHooks({
     const optionsTypeName = `${pascalName}MutationOptions`;
     // Generate useMutation hook for create/update/delete functions
     hooks.push(`interface ${optionsTypeName} extends Omit<UseMutationOptions<${returnsTypeName}, Error, ${argsTypeName}, unknown>, 'mutationFn'> {
+  mutationKey?: unknown[];
   queryInvalidate?: string[][];
 }
 
@@ -349,8 +350,9 @@ export function ${hookName}(
   options?: ${optionsTypeName},
 ) {
   const queryClient = useQueryClient();
-  const { queryInvalidate, onSuccess, ...mutationOptions } = options ?? {};
+  const { mutationKey, queryInvalidate, onSuccess, ...mutationOptions } = options ?? {};
   return useMutation({
+    mutationKey: mutationKey ?? ['${functionName}'],
     mutationFn: async (args: ${argsTypeName}) => {
       const argsResult = ${argsSchemaName}.safeParse(args);
       if (!argsResult.success) {
